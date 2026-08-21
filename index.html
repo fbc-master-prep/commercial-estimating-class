@@ -710,11 +710,7 @@ var DELIV = [
  {n:5,t:"What is airless spraying and painting equipment",s:"Session 5",reqs:["Carpentry allowance stated in LF and SF","Unit price schedule published","Exclusions written out","Risk items priced, not absorbed","Passed the estimate review gate"]},
  {n:6,t:"Why Use Google Earth Pro",s:"Session 6",reqs:["Site plan marked with work sequence","Leasing path and model unit protected","Advance notice + balcony clearance drafted","Vehicle relocation plan","Non-compliance protocol defined"]},
  {n:7,t:"Audubon In-Person",s:"Session 7",reqs:["Eight scenarios: prevention and response","Two highest-exposure scenarios named for this property","Proposal language written for each"]},
- {n:8,t:"Customer value narrative",s:"Session 8",reqs:["Written in the customer's terms","Every input labeled as theirs or assumed","Per-door cost stated","A defensible 'why now'"]},
- {n:9,t:"One-page executive summary",s:"Session 9",reqs:["Actually one page","Per door on every option","Three options including a phased one","Resident impact paragraph present","Allowance stated on page one"]},
- {n:10,t:"Account plan",s:"Session 10",reqs:["Every contact with role and authority","Next action per contact","One real action completed and reported"]},
- {n:11,t:"Rehearsed presentation",s:"Session 11",reqs:["20-minute version","5-slide compressed version","Recorded at least once","Objection responses drilled"]},
- {n:12,t:"Capstone submission",s:"Session 12",reqs:["Full proposal stack assembled","Presentation delivered to the panel","Rubric scored"]}
+ {n:8,t:"Price with Authority not Anxiety",s:"Session 8",reqs:["Written in the customer's terms","Every input labeled as theirs or assumed","Per-door cost stated","A defensible 'why now'"]}
 ];
 var ST = [
  {k:"s0",g:"○",l:"Not started",c:"#D6D2CC",fg:"#4A4540"},
@@ -1080,10 +1076,11 @@ function calcOut(){
 }
 function updateTiles(){
   if(!S) return;
-  var homework=S.deliverables.filter(function(d){
+  var visible=S.deliverables.slice(0,DELIV.length);
+  var homework=visible.filter(function(d){
     return d.status>0 || d.files.length>0 || !!d.notes.trim() || d.checks.some(function(v){return v;});
   }).length;
-  var completed=S.deliverables.filter(function(d){return d.status>=2;}).length;
+  var completed=visible.filter(function(d){return d.status>=2;}).length;
   var estimates=(+S.calc.total||0)>0 ? 1 : 0;
   $("tHomework").textContent=homework;
   $("tCompleted").textContent=completed;
@@ -1091,11 +1088,12 @@ function updateTiles(){
 }
 function renderSend(){
   var nf=0, sz=0;
-  S.deliverables.forEach(function(d){ nf+=d.files.length; d.files.forEach(function(f){ sz+=f.size||0; }); });
-  var done=S.deliverables.filter(function(d){return d.status>=2}).length;
+  var visible=S.deliverables.slice(0,DELIV.length);
+  visible.forEach(function(d){ nf+=d.files.length; d.files.forEach(function(f){ sz+=f.size||0; }); });
+  var done=visible.filter(function(d){return d.status>=2}).length;
   $("sendSummary").innerHTML =
     '<div class="hi">'+esc(S.student.name||"Unnamed")+' · '+esc(S.property.name||"No property named")+'</div>'+
-    '<div>'+done+' of 12 deliverables submitted or beyond</div>'+
+    '<div>'+done+' of '+DELIV.length+' deliverables submitted or beyond</div>+'+
     '<div>'+nf+' attached document'+(nf===1?"":"s")+' · '+bytes(sz)+'</div>'+
     '<div class="dim">Target approval score: '+testScore(S)+' of 8</div>';
 }
@@ -1490,7 +1488,7 @@ $("gradeFile").onchange=function(){ var f=this.files[0]; if(!f)return;
 $("mailFac").onclick=function(){
   var sub=encodeURIComponent("["+CFG.cohort+"] Submission — "+(S.student.name||""));
   var body=encodeURIComponent("My submission file is attached.\n\nProperty: "+(S.property.name||"")+"\nDeliverables submitted: "+
-    S.deliverables.filter(function(d){return d.status>=2}).length+" of 12\nTarget approval score: "+testScore(S)+" of 8\n\n— "+(S.student.name||""));
+    S.deliverables.slice(0,DELIV.length).filter(function(d){return d.status>=2}).length+" of "+DELIV.length+"\nTarget approval score: "+testScore(S)+" of 8\n\n— "+(S.student.name||""));
   window.location.href="mailto:"+CFG.facilitatorEmail+"?subject="+sub+"&body="+body;
 };
 $("resetAll").onclick=function(){
