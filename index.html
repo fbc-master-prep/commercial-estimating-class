@@ -272,9 +272,6 @@ window.CONFIG = {
 
     <div class="tabs" role="tablist">
       <button id="tabWork" aria-selected="true">Deliverables</button>
-      <button id="tabProp" aria-selected="false">Property record</button>
-      <button id="tabField" aria-selected="false">Field capture</button>
-      <button id="tabCalc" aria-selected="false">Calculators</button>
       <button id="tabSend" aria-selected="false">Save &amp; send</button>
     </div>
 
@@ -283,9 +280,8 @@ window.CONFIG = {
       <div class="cols">
         <div>
           <div class="card">
-            <div class="kicker">The twelve deliverables</div>
-            <h3 style="margin-top:5px">One artifact per session</h3>
-            <div class="cap">Click a row to open it. Status: Not started → Draft → Submitted → Approved.</div>
+            <div class="kicker">Deliverables</div>
+            <div class="cap">Click a row to open it. Status: Not started → Draft → Submitted.</div>
             <div class="track" id="track"></div>
             <div class="legend" id="legend"></div>
           </div>
@@ -707,13 +703,13 @@ var PRISTINE = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
 
 /* ============================ CONTENT ============================ */
 var DELIV = [
- {n:1,t:"Buying map",s:"Session 1",reqs:["All roles listed — blanks left blank, not guessed","Management company named","Ownership entity verified in property records","OpEx vs CapEx path identified","Budget-season window noted"]},
- {n:2,t:"Field survey + photo log",s:"Session 2",reqs:["60+ photos tagged by building and elevation","Building types identified and counted","Five price-driving conditions assessed","Pre-existing damage documented","Site plan and unit mix obtained"]},
- {n:3,t:"Exterior takeoff",s:"Session 3",reqs:["Quantities by building type, not blended","Verified against aerial imagery","Surface categories separated","Access method priced as its own line","Written assumptions attached"]},
- {n:4,t:"Turn matrix + common areas",s:"Session 4",reqs:["Rate by floorplan","Vacancy day cost computed from actual advertised rent","Common area scope listed","Per-door figure stated"]},
- {n:5,t:"Priced estimate + unit prices",s:"Session 5",reqs:["Carpentry allowance stated in LF and SF","Unit price schedule published","Exclusions written out","Risk items priced, not absorbed","Passed the estimate review gate"]},
- {n:6,t:"Phasing plan + resident comms kit",s:"Session 6",reqs:["Site plan marked with work sequence","Leasing path and model unit protected","Advance notice + balcony clearance drafted","Vehicle relocation plan","Non-compliance protocol defined"]},
- {n:7,t:"Risk playbook",s:"Session 7",reqs:["Eight scenarios: prevention and response","Two highest-exposure scenarios named for this property","Proposal language written for each"]},
+ {n:1,t:"Homework Assignments",s:"Session 1",reqs:["All roles listed — blanks left blank, not guessed","Management company named","Ownership entity verified in property records","OpEx vs CapEx path identified","Budget-season window noted"]},
+ {n:2,t:"Completed Homework",s:"Session 2",reqs:["60+ photos tagged by building and elevation","Building types identified and counted","Five price-driving conditions assessed","Pre-existing damage documented","Site plan and unit mix obtained"]},
+ {n:3,t:"Estimates",s:"Session 3",reqs:["Quantities by building type, not blended","Verified against aerial imagery","Surface categories separated","Access method priced as its own line","Written assumptions attached"]},
+ {n:4,t:"Recorded Class Videos",s:"Session 4",reqs:["Rate by floorplan","Vacancy day cost computed from actual advertised rent","Common area scope listed","Per-door figure stated"]},
+ {n:5,t:"What is airless spraying and painting equipment",s:"Session 5",reqs:["Carpentry allowance stated in LF and SF","Unit price schedule published","Exclusions written out","Risk items priced, not absorbed","Passed the estimate review gate"]},
+ {n:6,t:"Why Use Google Earth Pro",s:"Session 6",reqs:["Site plan marked with work sequence","Leasing path and model unit protected","Advance notice + balcony clearance drafted","Vehicle relocation plan","Non-compliance protocol defined"]},
+ {n:7,t:"Audubon In-Person",s:"Session 7",reqs:["Eight scenarios: prevention and response","Two highest-exposure scenarios named for this property","Proposal language written for each"]},
  {n:8,t:"Customer value narrative",s:"Session 8",reqs:["Written in the customer's terms","Every input labeled as theirs or assumed","Per-door cost stated","A defensible 'why now'"]},
  {n:9,t:"One-page executive summary",s:"Session 9",reqs:["Actually one page","Per door on every option","Three options including a phased one","Resident impact paragraph present","Allowance stated on page one"]},
  {n:10,t:"Account plan",s:"Session 10",reqs:["Every contact with role and authority","Next action per contact","One real action completed and reported"]},
@@ -1413,7 +1409,7 @@ function exportCSV(){
 
 /* ============================ WIRING ============================ */
 function showTab(which){
-  var tabs=[["tabWork","paneWork"],["tabProp","paneProp"],["tabField","paneField"],["tabCalc","paneCalc"],["tabSend","paneSend"]];
+  var tabs=[["tabWork","paneWork"],["tabSend","paneSend"]];
   tabs.forEach(function(t){
     var on=t[0]===which;
     $(t[0]).setAttribute("aria-selected",String(on));
@@ -1464,7 +1460,7 @@ $("suFile").onchange=function(){ var f=this.files[0]; if(!f) return;
 };
 
 // tabs
-["tabWork","tabProp","tabField","tabCalc","tabSend"].forEach(function(id){ $(id).onclick=function(){showTab(id)}; });
+["tabWork","tabSend"].forEach(function(id){ $(id).onclick=function(){showTab(id)}; });
 
 // deposit
 wireDrop($("drop"), attachFiles);
