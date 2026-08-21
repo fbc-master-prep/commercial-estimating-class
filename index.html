@@ -98,7 +98,7 @@ window.CONFIG = {
   .cap{font-size:12.5px;color:var(--muted);margin:3px 0 14px}
   .kicker{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--brand);font-weight:700}
 
-  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
   @media(max-width:800px){.tiles{grid-template-columns:repeat(2,1fr)}}
   .tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
   .tile .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
@@ -265,10 +265,9 @@ window.CONFIG = {
   <!-- ============ PARTICIPANT ============ -->
   <div id="viewP" class="hide">
     <div class="tiles">
-      <div class="tile"><div class="k">Approved</div><div class="v" id="tApproved">0</div><div class="n">of 12 deliverables</div></div>
-      <div class="tile"><div class="k">Photo log</div><div class="v" id="tPhotos">0</div><div class="n">target 60+, tagged</div></div>
-      <div class="tile"><div class="k">Cost per door</div><div class="v" id="tPerDoor">—</div><div class="n">current estimate</div></div>
-      <div class="tile"><div class="k">Days to capstone</div><div class="v" id="tDays">—</div><div class="n" id="tDaysN">Session 12</div></div>
+      <div class="tile"><div class="k">Homework Assignments</div><div class="v" id="tHomework">0</div><div class="n">assignments added</div></div>
+      <div class="tile"><div class="k">Completed Homework</div><div class="v" id="tCompleted">0</div><div class="n">submitted or approved</div></div>
+      <div class="tile"><div class="k">Estimates</div><div class="v" id="tEstimates">0</div><div class="n">estimates added</div></div>
     </div>
 
     <div class="tabs" role="tablist">
@@ -1085,16 +1084,14 @@ function calcOut(){
 }
 function updateTiles(){
   if(!S) return;
-  $("tApproved").textContent=S.deliverables.filter(function(d){return d.status===4}).length;
-  var tot=0; Object.keys(S.photos).forEach(function(k){tot+=S.photos[k]||0});
-  $("tPhotos").textContent=tot;
-  var units=+S.property.units||0;
-  $("tPerDoor").textContent = units&&S.calc.total? money(S.calc.total/units) : "—";
-  if(CFG.capstoneDate){
-    var dd=Math.ceil((new Date(CFG.capstoneDate)-new Date())/86400000);
-    $("tDays").textContent = dd>0?dd:"—";
-    $("tDaysN").textContent="Session 12 · "+new Date(CFG.capstoneDate).toLocaleDateString(undefined,{month:"short",day:"numeric"});
-  }
+  var homework=S.deliverables.filter(function(d){
+    return d.status>0 || d.files.length>0 || !!d.notes.trim() || d.checks.some(function(v){return v;});
+  }).length;
+  var completed=S.deliverables.filter(function(d){return d.status>=2;}).length;
+  var estimates=(+S.calc.total||0)>0 ? 1 : 0;
+  $("tHomework").textContent=homework;
+  $("tCompleted").textContent=completed;
+  $("tEstimates").textContent=estimates;
 }
 function renderSend(){
   var nf=0, sz=0;
@@ -1472,7 +1469,7 @@ $("suFile").onchange=function(){ var f=this.files[0]; if(!f) return;
 // deposit
 wireDrop($("drop"), attachFiles);
 $("fileIn").onchange=function(){ attachFiles(this.files); this.value=""; };
-$("notes").oninput=function(){ S.deliverables[selD].notes=this.value; save(); };
+$("notes").oninput=function(){ S.deliverables[selD].notes=this.value; save(); updateTiles(); };
 
 
 // send / restore
