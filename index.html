@@ -80,6 +80,8 @@ window.CONFIG = {
   .who{font-size:13px;color:#CFC8C0}
   .savebtn{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:700;font-size:13.5px;white-space:nowrap}
   .savebtn:hover{background:#a3453a}
+  .downloadbtn{display:inline-flex;align-items:center;justify-content:center;background:#fff;color:var(--ink);border:1px solid rgba(255,255,255,.7);border-radius:8px;padding:8px 14px;font-weight:700;font-size:13.5px;white-space:nowrap;text-decoration:none}
+  .downloadbtn:hover{background:var(--sand);color:var(--ink)}
   .savebar{position:sticky;bottom:8px;z-index:30;background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--brand);border-radius:var(--r);padding:12px 16px;margin-top:4px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 -3px 14px rgba(46,42,38,.07)}
   .savebar .lbl{font-size:13px;color:var(--muted);flex:1;min-width:180px}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:26px;background:var(--ink);color:#fff;padding:13px 22px;border-radius:10px;font-size:14px;font-weight:600;z-index:200;box-shadow:0 6px 24px rgba(0,0,0,.28);max-width:90vw;text-align:center}
@@ -227,6 +229,7 @@ window.CONFIG = {
   <span class="spacer"></span>
   <span class="savedot" id="saveDot"></span>
   <button class="btn savebtn hide" id="topSave">Save my work</button>
+  <a class="downloadbtn" href="./index.html" download="Commercial Estimating Class.html" title="Download the complete Commercial Estimating Class app">⬇ Download this document</a>
   <div class="roleswitch" role="group" aria-label="View as">
     <button id="rP" aria-pressed="true">Participant</button>
     <button id="rF" aria-pressed="false">Facilitator</button>
