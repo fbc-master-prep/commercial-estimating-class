@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Commercial Estimating Class</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <!--
   ============================================================================
   COMMERCIAL ESTIMATING CLASS  —  single file, no server required
@@ -219,6 +220,10 @@ window.CONFIG = {
   .pitem .sm{font-size:11.5px;color:var(--muted)}
   .bar{display:flex;gap:2px}
   .bar i{width:10px;height:16px;border-radius:2px;display:block}
+  .livegrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end}
+  .liveactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .liveurl{margin-top:10px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--tint);font-size:12px;word-break:break-all}
+  @media(max-width:700px){.livegrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -557,6 +562,23 @@ window.CONFIG = {
 
   <!-- ============ FACILITATOR ============ -->
   <div id="viewF" class="hide">
+    <div class="card" id="participantAccessCard">
+      <div class="kicker">Live participant access</div>
+      <h3 style="margin-top:5px">Create and monitor participant links</h3>
+      <div class="cap">Upload an Excel or CSV roster, select a participant, then create their private link. Work completed through that link updates this instructor master view.</div>
+      <div class="livegrid">
+        <div><label class="fl" for="instructorName">Instructor</label><input type="text" id="instructorName" value="Instructor" autocomplete="name"></div>
+        <div><label class="fl" for="participantSelect">Participant</label><select id="participantSelect"><option value="">Upload a roster first…</option></select></div>
+      </div>
+      <div class="liveactions">
+        <button class="btn s" id="uploadRosterBtn">Upload Excel participant list</button>
+        <input type="file" id="rosterFile" accept=".xlsx,.xls,.csv" class="hide">
+        <button class="btn p" id="participantLinkBtn" disabled>Create Participant Link</button>
+        <button class="btn s" id="refreshParticipantBtn" disabled>Refresh Participant</button>
+      </div>
+      <div id="participantLinkOutput"></div>
+      <div class="note">The participant link is locked to the selected participant. Changing the URL cannot open another participant's record.</div>
+    </div>
     <div class="tiles">
       <div class="tile"><div class="k">Participants loaded</div><div class="v" id="fN">0</div><div class="n">submission files imported</div></div>
       <div class="tile"><div class="k">Awaiting review</div><div class="v" id="fAwait">0</div><div class="n">submitted, unscored</div></div>
@@ -767,6 +789,14 @@ function del(k){
 
 /* ============================ STATE ============================ */
 var S=null, cohort=[], selD=0, revSel={p:-1,d:-1}, FAC=null;
+var CLASS_MASTER_ID="79623d6f-2a1f-43a3-912c-c76262014b22";
+var CLASS_SHARED_API="https://csa-prep-sheet.jamesehigh.chatgpt.site/api/sheets";
+var sharedSheetId=CLASS_MASTER_ID, participantToken="", liveSaveT=null, livePoll=null, activeParticipant="";
+try{
+  var liveParams=new URLSearchParams(location.search);
+  if(/^[a-f0-9-]{36}$/i.test(liveParams.get("sheet")||"")) sharedSheetId=liveParams.get("sheet");
+  if(/^[a-f0-9-]{36}$/i.test(liveParams.get("participant")||"")) participantToken=liveParams.get("participant");
+}catch(e){}
 function blankState(name,email,branch){
   return {
     v:1, exportedAt:null,
@@ -800,8 +830,47 @@ function save(){
   }
   var el=$("saveDot"); el.textContent=(ok?"Saved ":"Saved (text only) ")+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   clearTimeout(saveT); saveT=setTimeout(function(){el.textContent="";},2500);
+  queueLiveSave();
 }
-function saveCohort(){ put("cohort",cohort); }
+function saveCohort(){ put("cohort",cohort); if(activeParticipant) queueLiveSave(); }
+
+function liveInstructor(){ var e=$("instructorName"); return (e&&e.value.trim())||"Instructor"; }
+function liveRequest(method,body,participant){
+  var q="";
+  if(method==="GET") q=participantToken ? "?franchiseToken="+encodeURIComponent(participantToken)
+    : "?id="+encodeURIComponent(sharedSheetId)+"&fbc="+encodeURIComponent(liveInstructor())+"&franchise="+encodeURIComponent(participant||activeParticipant);
+  var out=body||{};
+  if(method!=="GET"&&participantToken){ out=Object.assign({},out,{franchiseToken:participantToken}); }
+  return fetch(CLASS_SHARED_API+q,{method:method,headers:{"Content-Type":"application/json"},body:method==="GET"?undefined:JSON.stringify(out)});
+}
+function stateWithoutHeavyFiles(st){
+  var copy=JSON.parse(JSON.stringify(st||{}));
+  (copy.deliverables||[]).forEach(function(d){ (d.files||[]).forEach(function(f){ if(f.data) f.data=null; }); });
+  return copy;
+}
+function pushLive(){
+  if(!S||(!participantToken&&!activeParticipant)) return Promise.resolve();
+  var participant=participantToken?(S.student&&S.student.name||activeParticipant):activeParticipant;
+  return liveRequest("POST",{id:sharedSheetId,fbc:liveInstructor(),franchise:participant,answers:{workbench:JSON.stringify(stateWithoutHeavyFiles(S))}},participant)
+    .then(function(r){if(!r.ok)throw new Error("save");return r.json();})
+    .then(function(){var e=$("saveDot");if(e)e.textContent="Saved to instructor ✓";})
+    .catch(function(){var e=$("saveDot");if(e)e.textContent="Online save pending";});
+}
+function queueLiveSave(){ if(!participantToken&&!activeParticipant)return; clearTimeout(liveSaveT); liveSaveT=setTimeout(pushLive,700); }
+function applyLiveData(data,asInstructor){
+  var raw=data&&data.answers&&data.answers.workbench;
+  if(!raw)return false;
+  var st;try{st=JSON.parse(raw);}catch(e){return false;}
+  if(!st||!st.student||!st.deliverables)return false;
+  S=st; put("state",S);
+  if(asInstructor){ upsert(st); saveCohort(); renderCohort(); }
+  else boot();
+  return true;
+}
+function fetchParticipant(name,asInstructor){
+  return liveRequest("GET",null,name).then(function(r){if(!r.ok)throw new Error("load");return r.json();})
+    .then(function(d){if(!applyLiveData(d,asInstructor))throw new Error("empty");return d;});
+}
 
 /* ============================ HELPERS ============================ */
 function $(id){return document.getElementById(id)}
@@ -1424,6 +1493,7 @@ function boot(){
     w.innerHTML="<b>Storage unavailable in this preview.</b> Your work will not be saved if you close this tab. Download this file to your computer and open it from there — then it saves automatically.";
   }
   $("wsName").textContent = "Workspace: " + WS;
+  if(participantToken){ $("rF").classList.add("hide"); $("rP").setAttribute("aria-pressed","true"); }
   $("storeNote").textContent = storeMode==="idb" ? "Saving to this browser's local database. Files are stored with your record."
     : storeMode==="local" ? "Saving to browser storage, which is limited to a few megabytes. Big photo sets may not survive a restart — download your submission file after each session."
     : "Not saving. Open this file from your own computer to enable saving.";
@@ -1487,6 +1557,63 @@ $("resetAll").onclick=function(){
   del("state"); S=null; location.reload();
 };
 
+/* live roster and participant links */
+var roster=[];
+function participantUrl(token){var u=new URL(location.href);u.search="";u.hash="";u.searchParams.set("participant",token);return u.toString();}
+function copyText(value){
+  if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(value);
+  var t=document.createElement("textarea");t.value=value;document.body.appendChild(t);t.select();document.execCommand("copy");t.remove();return Promise.resolve();
+}
+function renderRoster(){
+  var s=$("participantSelect");if(!s)return;s.innerHTML='<option value="">Select a participant…</option>';
+  roster.forEach(function(p){var o=document.createElement("option");o.value=p.name;o.textContent=p.name+(p.email?" — "+p.email:"");s.appendChild(o);});
+  s.value=activeParticipant||"";$("participantLinkBtn").disabled=!s.value;$("refreshParticipantBtn").disabled=!s.value;
+}
+function normalizeRoster(rows){
+  if(!rows.length)return[];var headers=rows[0].map(function(v){return String(v||"").trim().toLowerCase();});
+  var ni=headers.findIndex(function(h){return h==="participant"||h==="participant name"||h==="name"||h==="student";});
+  var ei=headers.findIndex(function(h){return h==="email"||h==="email address"||h==="participant email";});
+  var start=1;if(ni<0){ni=0;start=0;}
+  var seen={};return rows.slice(start).map(function(r){return{name:String(r[ni]||"").trim(),email:ei>=0?String(r[ei]||"").trim():""};})
+    .filter(function(p){var k=p.name.toLowerCase();if(!k||seen[k])return false;seen[k]=1;return true;})
+    .sort(function(a,b){return a.name.localeCompare(b.name);});
+}
+function loadRosterFile(file){
+  var reader=new FileReader();reader.onload=function(){
+    try{
+      var rows;
+      if(/\.csv$/i.test(file.name)){rows=String(reader.result).split(/\r?\n/).filter(Boolean).map(function(line){return line.split(",").map(function(v){return v.replace(/^\s*"|"\s*$/g,"").replace(/""/g,'"');});});}
+      else {if(!window.XLSX)throw new Error("Excel reader unavailable");var wb=XLSX.read(reader.result,{type:"array"});rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});}
+      roster=normalizeRoster(rows);put("liveRoster",roster);renderRoster();
+      $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px">'+roster.length+' participant'+(roster.length===1?"":"s")+' loaded into the menu.</div>';
+    }catch(e){$("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">Could not read that roster. Use an Excel or CSV file with a Participant or Name column.</div>';}
+  };if(/\.csv$/i.test(file.name))reader.readAsText(file);else reader.readAsArrayBuffer(file);
+}
+function initLiveControls(){
+  get("liveRoster").then(function(r){roster=r||[];renderRoster();});
+  get("liveInstructor").then(function(n){if(n)$("instructorName").value=n;});
+  $("instructorName").onchange=function(){put("liveInstructor",this.value.trim()||"Instructor");};
+  $("uploadRosterBtn").onclick=function(){$("rosterFile").click();};
+  $("rosterFile").onchange=function(){if(this.files[0])loadRosterFile(this.files[0]);this.value="";};
+  $("participantSelect").onchange=function(){
+    activeParticipant=this.value;$("participantLinkBtn").disabled=!activeParticipant;$("refreshParticipantBtn").disabled=!activeParticipant;
+    if(livePoll){clearInterval(livePoll);livePoll=null;}
+    if(!activeParticipant)return;
+    fetchParticipant(activeParticipant,true).then(function(){toast("Loaded "+activeParticipant+" from the master record");})
+      .catch(function(){toast("No saved work yet for "+activeParticipant);});
+    livePoll=setInterval(function(){fetchParticipant(activeParticipant,true).catch(function(){});},3000);
+  };
+  $("refreshParticipantBtn").onclick=function(){if(activeParticipant)fetchParticipant(activeParticipant,true).then(function(){toast("Participant record refreshed");}).catch(function(){toast("No online record yet");});};
+  $("participantLinkBtn").onclick=function(){
+    if(!activeParticipant)return;var b=this;b.disabled=true;b.textContent="Creating link…";
+    fetch(CLASS_SHARED_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"createFranchiseLink",id:sharedSheetId,fbc:liveInstructor(),franchise:activeParticipant})})
+      .then(function(r){if(!r.ok)throw new Error("create");return r.json();}).then(function(d){if(!d.token)throw new Error("create");var url=participantUrl(d.token);return copyText(url).then(function(){
+        $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant link copied.</b><div class="liveurl">'+esc(url)+'</div></div>';});})
+      .catch(function(){$("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">The participant link could not be created. Try again.</div>';})
+      .finally(function(){b.textContent="Create Participant Link";b.disabled=!activeParticipant;});
+  };
+}
+
 // facilitator gate
 $("rP").onclick=function(){
   $("rP").setAttribute("aria-pressed","true"); $("rF").setAttribute("aria-pressed","false");
@@ -1524,6 +1651,7 @@ function enterFacilitator(){
   $("who").textContent=CFG.facilitatorName+" — Facilitator";
   $("curPass").value=effectivePass(); $("curPass").type="password";
   renderFacMode(); renderCohort(); renderRubric();
+  renderRoster();
 }
 $("rF").onclick=function(){
   var m=facMode();
@@ -1604,6 +1732,7 @@ idbOpen().then(function(db){
   return Promise.all([get("state"),get("cohort"),get("fac"),get("fh"),get("fhName")]);
 }).then(function(r){
   var local=r[0]; cohort=r[1]||[]; FAC=r[2]||null;
+  initLiveControls();
   fileHandle=r[3]||null; linkedName=r[4]||"";
   var embedded=readEmbedded();
 
@@ -1612,7 +1741,7 @@ idbOpen().then(function(db){
     if(local)    picks.push({src:"this computer", st:local});
     if(embedded) picks.push({src:"the file itself", st:embedded});
     if(linked)   picks.push({src:"the linked data file", st:linked});
-    if(!picks.length){ S=null; boot(); return; }
+    if(!picks.length){ S=null; if(participantToken){fetchParticipant("",false).catch(function(){boot();});}else boot(); return; }
     picks.sort(function(a,b){ return (b.st.savedAt||b.st.exportedAt||0)-(a.st.savedAt||a.st.exportedAt||0); });
     S=picks[0].st;
     boot();
@@ -1622,6 +1751,7 @@ idbOpen().then(function(db){
         new Date(S.savedAt||S.exportedAt).toLocaleString()+"). Everything below is where you left off.";
     }
     renderSync();
+    if(participantToken) fetchParticipant("",false).catch(function(){});
   }
 
   if(fileHandle && fileHandle.queryPermission){
