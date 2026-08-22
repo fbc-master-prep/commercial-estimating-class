@@ -848,19 +848,32 @@ function stateWithoutHeavyFiles(st){
   (copy.deliverables||[]).forEach(function(d){ (d.files||[]).forEach(function(f){ if(f.data) f.data=null; }); });
   return copy;
 }
+function encodeLiveState(st){
+  var json=JSON.stringify(stateWithoutHeavyFiles(st)), size=18000, parts=[], answers={};
+  for(var i=0;i<json.length;i+=size)parts.push(json.slice(i,i+size));
+  if(parts.length>12)throw new Error("record-too-large");
+  parts.forEach(function(part,index){answers[String(index+1)]=part;});
+  answers.fbcNotes="__COMMERCIAL_CLASS_V1__:"+parts.length;
+  return answers;
+}
+function decodeLiveState(answers){
+  if(!answers||String(answers.fbcNotes||"").indexOf("__COMMERCIAL_CLASS_V1__:")!==0)return null;
+  var count=parseInt(String(answers.fbcNotes).split(":")[1],10)||0, json="";
+  for(var i=1;i<=count;i++)json+=String(answers[String(i)]||answers[i]||"");
+  try{return JSON.parse(json);}catch(e){return null;}
+}
 function pushLive(){
   if(!S||(!participantToken&&!activeParticipant)) return Promise.resolve();
   var participant=participantToken?(S.student&&S.student.name||activeParticipant):activeParticipant;
-  return liveRequest("POST",{id:sharedSheetId,fbc:liveInstructor(),franchise:participant,answers:{workbench:JSON.stringify(stateWithoutHeavyFiles(S))}},participant)
+  var encoded;try{encoded=encodeLiveState(S);}catch(e){var x=$("saveDot");if(x)x.textContent="Online record is too large";return Promise.reject(e);}
+  return liveRequest("POST",{id:sharedSheetId,fbc:liveInstructor(),franchise:participant,answers:encoded},participant)
     .then(function(r){if(!r.ok)throw new Error("save");return r.json();})
     .then(function(){var e=$("saveDot");if(e)e.textContent="Saved to instructor ✓";})
     .catch(function(){var e=$("saveDot");if(e)e.textContent="Online save pending";});
 }
 function queueLiveSave(){ if(!participantToken&&!activeParticipant)return; clearTimeout(liveSaveT); liveSaveT=setTimeout(pushLive,700); }
 function applyLiveData(data,asInstructor){
-  var raw=data&&data.answers&&data.answers.workbench;
-  if(!raw)return false;
-  var st;try{st=JSON.parse(raw);}catch(e){return false;}
+  var st=decodeLiveState(data&&data.answers);
   if(!st||!st.student||!st.deliverables)return false;
   S=st; put("state",S);
   if(asInstructor){ upsert(st); saveCohort(); renderCohort(); }
@@ -1591,11 +1604,17 @@ function loadRosterFile(file){
 }
 function ensureParticipantRecord(name){
   return liveRequest("GET",null,name).then(function(r){
-    if(r.ok)return r.json();
+    if(r.ok)return r.json().then(function(existing){
+      if(decodeLiveState(existing.answers))return existing;
+      var current=roster.filter(function(p){return p.name===name;})[0]||{name:name,email:""};
+      var seeded=blankState(current.name,current.email,"");
+      return liveRequest("POST",{id:sharedSheetId,fbc:liveInstructor(),franchise:name,answers:encodeLiveState(seeded)},name)
+        .then(function(saved){if(!saved.ok)throw new Error("record");return saved.json();});
+    });
     if(r.status!==404)throw new Error("record");
     var row=roster.filter(function(p){return p.name===name;})[0]||{name:name,email:""};
     var initial=blankState(row.name,row.email,"");
-    return liveRequest("POST",{id:sharedSheetId,fbc:liveInstructor(),franchise:name,answers:{workbench:JSON.stringify(initial)}},name)
+    return liveRequest("POST",{id:sharedSheetId,fbc:liveInstructor(),franchise:name,answers:encodeLiveState(initial)},name)
       .then(function(created){if(!created.ok)throw new Error("record");return created.json();});
   });
 }
