@@ -582,7 +582,7 @@ window.CONFIG = {
         <button class="btn s" id="uploadRosterBtn">Upload Excel participant list</button>
         <input type="file" id="rosterFile" accept=".xlsx,.xls,.csv" class="hide">
         <button class="btn p" id="participantLinkBtn" disabled>Create Participant Link</button>
-        <button class="btn s" id="exportParticipantLinkBtn" disabled>Export Current Participant Link</button>
+        <button class="btn s" id="exportParticipantNamesBtn" disabled>Export Participant Names</button>
         <button class="btn s" id="refreshParticipantBtn" disabled>Refresh Participant</button>
       </div>
       <div id="participantLinkOutput"></div>
@@ -1331,6 +1331,7 @@ function upsert(rec){
   return true;
 }
 function renderCohort(){
+  updateParticipantNamesExport();
   $("fN").textContent=cohort.length;
   var await_=0, behind=0, tq=0;
   cohort.forEach(function(c){
@@ -1748,7 +1749,17 @@ function renderRoster(){
   if(document.activeElement===s) return; /* never rebuild the menu while the facilitator is choosing from it */
   s.innerHTML='<option value="">Select a participant…</option>';
   roster.forEach(function(p){var o=document.createElement("option");o.value=p.name;o.textContent=p.name+(p.email?" — "+p.email:"");s.appendChild(o);});
-  s.value=activeParticipant||"";$("participantLinkBtn").disabled=!s.value;$("exportParticipantLinkBtn").disabled=!(currentParticipantLink&&currentParticipantLinkName===s.value);$("refreshParticipantBtn").disabled=!s.value;
+  s.value=activeParticipant||"";$("participantLinkBtn").disabled=!s.value;$("refreshParticipantBtn").disabled=!s.value;updateParticipantNamesExport();
+}
+function participantNames(){
+  var seen={}, names=[];
+  function add(name){name=String(name||"").trim();var key=name.toLowerCase();if(!name||isDirName(name)||seen[key])return;seen[key]=1;names.push(name);}
+  roster.forEach(function(p){add(p.name);});
+  cohort.forEach(function(p){add(p.student&&(p.student.name||p.student.email));});
+  return names.sort(function(a,b){return a.localeCompare(b);});
+}
+function updateParticipantNamesExport(){
+  var b=$("exportParticipantNamesBtn");if(b)b.disabled=!participantNames().length;
 }
 function normalizeRoster(rows){
   if(!rows.length)return[];var headers=rows[0].map(function(v){return String(v||"").trim().toLowerCase();});
@@ -1804,7 +1815,7 @@ function initLiveControls(){
   $("rosterFile").onchange=function(){if(this.files[0])loadRosterFile(this.files[0]);this.value="";};
   $("participantSelect").onchange=function(){
     clearTimeout(liveSaveT); /* cancel any pending save queued for the previous participant */
-    activeParticipant=this.value;currentParticipantLink="";currentParticipantLinkName="";$("participantLinkBtn").disabled=!activeParticipant;$("exportParticipantLinkBtn").disabled=true;$("refreshParticipantBtn").disabled=!activeParticipant;
+    activeParticipant=this.value;currentParticipantLink="";currentParticipantLinkName="";$("participantLinkBtn").disabled=!activeParticipant;$("refreshParticipantBtn").disabled=!activeParticipant;
     if(livePoll){clearInterval(livePoll);livePoll=null;}
     if(!activeParticipant)return;
     fetchParticipant(activeParticipant,true).then(function(){toast("Loaded "+activeParticipant+" from the master record");})
@@ -1814,15 +1825,20 @@ function initLiveControls(){
   $("refreshParticipantBtn").onclick=function(){if(activeParticipant)fetchParticipant(activeParticipant,true).then(function(){toast("Participant record refreshed");}).catch(function(){toast("No online record yet");});};
   $("participantLinkBtn").onclick=function(){
     if(!activeParticipant)return;var b=this;b.disabled=true;b.textContent="Creating link…";
-    getParticipantLink(activeParticipant).then(function(url){$("exportParticipantLinkBtn").disabled=false;return copyText(url).then(function(){
+    getParticipantLink(activeParticipant).then(function(url){return copyText(url).then(function(){
         $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant link copied.</b><div class="liveurl">'+esc(url)+'</div></div>';});})
       .catch(function(){$("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">The participant link could not be created. Try again.</div>';})
       .finally(function(){b.textContent="Create Participant Link";b.disabled=!activeParticipant;});
   };
-  $("exportParticipantLinkBtn").onclick=function(){
-    if(!activeParticipant||!currentParticipantLink||currentParticipantLinkName!==activeParticipant)return;
-    download(slug(activeParticipant)+"-participant-link.txt","Participant: "+activeParticipant+"\nParticipant link: "+currentParticipantLink+"\n","text/plain");
-    $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant link exported.</b><div class="liveurl">'+esc(currentParticipantLink)+'</div></div>';
+  $("exportParticipantNamesBtn").onclick=function(){
+    var names=participantNames();
+    if(!names.length){$("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">No participant names are available to export.</div>';return;}
+    if(!window.XLSX){$("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">The Excel exporter is unavailable. Refresh the page and try again.</div>';return;}
+    var sheet=XLSX.utils.aoa_to_sheet([["Participant Name"]].concat(names.map(function(name){return [name];})));
+    sheet["!cols"]=[{wch:32}];
+    var book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,"Participants");
+    XLSX.writeFile(book,"commercial-estimating-class-participants.xlsx");
+    $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant names exported.</b> '+names.length+' name'+(names.length===1?"":"s")+' included.</div>';
   };
 }
 
