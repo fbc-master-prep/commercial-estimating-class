@@ -692,12 +692,6 @@ window.CONFIG = {
           <div class="plist" id="plist"></div>
         </div>
 
-        <div class="card">
-          <div class="kicker">Target approval queue</div>
-          <h3 style="margin-top:5px">Vet before Session 2</h3>
-          <div class="cap">Auto-scored from each participant's property record.</div>
-          <div id="queue"></div>
-        </div>
       </div>
     </div>
   </div>
@@ -1348,7 +1342,6 @@ function renderCohort(){
   if(!cohort.length){
     $("cg").innerHTML='<tr><td style="padding:14px;font-size:13px;color:var(--muted)">No submissions loaded yet. Drop participant .json files above.</td></tr>';
     $("plist").innerHTML='<div style="font-size:12.5px;color:var(--muted)">Nothing loaded.</div>';
-    $("queue").innerHTML='<div style="font-size:12.5px;color:var(--muted)">Nothing to vet.</div>';
     $("legend2").innerHTML="";
     return;
   }
@@ -1375,23 +1368,15 @@ function renderCohort(){
   $("legend2").innerHTML=legendHTML();
 
   $("plist").innerHTML=cohort.map(function(p,i){
-    var ap=p.deliverables.filter(function(d){return d.status===4}).length;
-    return '<div class="pitem" data-p="'+i+'"><span><b>'+esc(p.student.name||"—")+'</b><div class="sm">'+esc(p.property.name||"No property")+' · '+(+p.property.units||0)+' units</div></span>'+
+    var submitted=p.deliverables.filter(function(d){return d.status>=2}).length;
+    return '<div class="pitem" data-p="'+i+'"><span><b>'+esc(p.student.name||"—")+'</b></span>'+
       '<span class="bar">'+p.deliverables.map(function(d){return '<i style="background:'+ST[d.status].c+'"></i>'}).join("")+'</span>'+
-      '<span style="font-size:12px;color:var(--muted)">'+ap+'/'+DELIV.length+'</span></div>';
+      '<span style="font-size:12px;color:var(--muted)">'+submitted+'/'+DELIV.length+'</span></div>';
   }).join("");
   [].forEach.call(document.querySelectorAll("#plist .pitem"),function(b){
     b.onclick=function(){ var pi=+b.dataset.p; openReview(pi, firstOpen(cohort[pi])); };
   });
 
-  var need=cohort.map(function(p,i){return {p:p,i:i,sc:testScore(p)}}).filter(function(x){return x.sc<6});
-  $("queue").innerHTML = need.length? need.map(function(x){
-    var res=testResults(x.p);
-    return '<div class="qitem" style="margin-bottom:10px"><h4>'+esc(x.p.property.name||"Unnamed property")+' — '+esc(x.p.student.name)+'</h4>'+
-      '<div class="sm">'+(+x.p.property.units||0)+' units · built '+esc(x.p.property.year||"?")+' · '+esc(x.p.property.kind)+'</div>'+
-      '<div class="tests">'+res.map(function(r){return '<div><span class="'+(r.ok?"y":"n")+'">'+(r.ok?"✓":"✕")+'</span>'+esc(r.t)+'</div>'}).join("")+'</div>'+
-      '<span class="chip s3"><span class="g">✕</span>'+x.sc+' of 8 — send back</span></div>';
-  }).join("") : '<div class="okbox">Every loaded target scores 6 of 8 or better.</div>';
 }
 function firstOpen(p){
   for(var i=0;i<p.deliverables.length;i++) if(p.deliverables[i].status===2) return i;
