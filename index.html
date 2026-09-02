@@ -35,7 +35,7 @@
     Always open it from the synced folder or from a local copy.
 
   SETUP
-    1. Edit the CONFIG block below: cohort, facilitator name/email, passcode.
+    1. Edit the CONFIG block below: cohort and facilitator name/email.
     2. Distribute the file. Each copy stores its work under its own FILE NAME,
        so "dana-workbench.html" and "ben-workbench.html" stay separate even in
        the same folder.
@@ -48,7 +48,7 @@ window.CONFIG = {
   showHeaderSubtitle:false,             // change to true to display cohort/program beside the title
   facilitatorName:   "Facilitator",
   facilitatorEmail:  "facilitator@example.com",
-  facilitatorPass:   "multifamily",     // <-- CHANGE THIS before distributing
+  facilitatorPass:   "",                // Set a device-only passcode in the Facilitator Access box
   capstoneDate:      "2026-10-24"
 };
 </script>
@@ -585,6 +585,7 @@ window.CONFIG = {
         <button class="btn p" id="participantLinkBtn" disabled>Create Participant Link</button>
         <button class="btn s" id="exportParticipantNamesBtn" disabled>Export Participant Names</button>
         <button class="btn s" id="refreshParticipantBtn" disabled>Refresh Participant</button>
+        <button class="btn d" id="removeParticipantBtn" disabled>Remove Participant</button>
       </div>
       <div id="participantLinkOutput"></div>
       <div class="note">The participant link is locked to the selected participant. Changing the URL cannot open another participant's record.</div>
@@ -640,7 +641,7 @@ window.CONFIG = {
       <div class="row" style="margin-top:12px">
         <button class="btn k" id="lockFac">Lock now &amp; require passcode next time</button>
       </div>
-      <div class="note">Changing it here affects <b>your</b> copy only. Participant copies keep the passcode in their file's CONFIG block — which is fine, since they never need it.</div>
+      <div class="note">Changing it here affects <b>this device only</b>. The passcode is stored locally and is not written into the public page source.</div>
     </div>
 
     <div class="card" id="cgCard">
@@ -913,6 +914,11 @@ function fetchDirectory(){
     .then(function(r){ if(!r.ok) throw new Error("dir"); return r.json(); })
     .then(function(d){ var o=decodeLiveState(d&&d.answers); return (o&&Array.isArray(o.dirV1))?o.dirV1:[]; });
 }
+function saveDirectory(list){
+  return fetch(CLASS_SHARED_API,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id:sharedSheetId,fbc:CLASS_FBC,franchise:DIR_KEY,answers:packDir(list)})})
+    .then(function(r){ if(!r.ok) throw new Error("dir-save"); return r.json(); });
+}
 function registerInDirectory(name){
   if(dirRegistered||!name||isDirName(name)) return;
   fetchDirectory().catch(function(){ return []; }).then(function(list){
@@ -920,9 +926,7 @@ function registerInDirectory(name){
     var i=-1; list.forEach(function(p,idx){ if(String(p.name||"").toLowerCase()===name.toLowerCase()) i=idx; });
     if(i>=0 && (!email||list[i].email===email)){ dirRegistered=true; return; }
     if(i>=0) list[i].email=email; else list.push({name:name,email:email,at:Date.now()});
-    return fetch(CLASS_SHARED_API,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id:sharedSheetId,fbc:CLASS_FBC,franchise:DIR_KEY,answers:packDir(list)})})
-      .then(function(r){ if(r.ok) dirRegistered=true; });
+    return saveDirectory(list).then(function(){ dirRegistered=true; });
   }).catch(function(){});
 }
 function applyLiveData(data,asInstructor){
@@ -1750,7 +1754,7 @@ function renderRoster(){
   if(document.activeElement===s) return; /* never rebuild the menu while the facilitator is choosing from it */
   s.innerHTML='<option value="">Select a participant…</option>';
   roster.forEach(function(p){var o=document.createElement("option");o.value=p.name;o.textContent=p.name+(p.email?" — "+p.email:"");s.appendChild(o);});
-  s.value=activeParticipant||"";$("participantLinkBtn").disabled=!s.value;$("refreshParticipantBtn").disabled=!s.value;updateParticipantNamesExport();
+  s.value=activeParticipant||"";$("participantLinkBtn").disabled=!s.value;$("refreshParticipantBtn").disabled=!s.value;$("removeParticipantBtn").disabled=!s.value;updateParticipantNamesExport();
 }
 function participantNames(){
   var seen={}, names=[];
@@ -1816,7 +1820,7 @@ function initLiveControls(){
   $("rosterFile").onchange=function(){if(this.files[0])loadRosterFile(this.files[0]);this.value="";};
   $("participantSelect").onchange=function(){
     clearTimeout(liveSaveT); /* cancel any pending save queued for the previous participant */
-    activeParticipant=this.value;currentParticipantLink="";currentParticipantLinkName="";$("participantLinkBtn").disabled=!activeParticipant;$("refreshParticipantBtn").disabled=!activeParticipant;
+    activeParticipant=this.value;currentParticipantLink="";currentParticipantLinkName="";$("participantLinkBtn").disabled=!activeParticipant;$("refreshParticipantBtn").disabled=!activeParticipant;$("removeParticipantBtn").disabled=!activeParticipant;
     if(livePoll){clearInterval(livePoll);livePoll=null;}
     if(!activeParticipant)return;
     fetchParticipant(activeParticipant,true).then(function(){toast("Loaded "+activeParticipant+" from the master record");})
@@ -1840,6 +1844,27 @@ function initLiveControls(){
     var book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,"Participants");
     XLSX.writeFile(book,"commercial-estimating-class-participants.xlsx");
     $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant names exported.</b> '+names.length+' name'+(names.length===1?"":"s")+' included.</div>';
+  };
+  $("removeParticipantBtn").onclick=function(){
+    var name=activeParticipant;
+    if(!name)return;
+    if(!confirm('Remove "'+name+'" from the participant list and dashboard? Their saved online work and existing participant link will not be deleted.'))return;
+    var b=this;b.disabled=true;b.textContent="Removing…";
+    fetchDirectory().then(function(list){
+      var key=name.toLowerCase();
+      return saveDirectory(list.filter(function(p){return String(p.name||"").trim().toLowerCase()!==key;}));
+    }).then(function(){
+      var key=name.toLowerCase();
+      roster=roster.filter(function(p){return String(p.name||"").trim().toLowerCase()!==key;});
+      cohort=cohort.filter(function(p){return String(p.student&&(p.student.name||p.student.email)||"").trim().toLowerCase()!==key;});
+      put("liveRoster",roster);saveCohort();
+      if(livePoll){clearInterval(livePoll);livePoll=null;}
+      activeParticipant="";currentParticipantLink="";currentParticipantLinkName="";revSel={p:-1,d:-1};
+      renderRoster();renderCohort();renderRubric();
+      $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>'+esc(name)+' removed.</b> The participant no longer appears in the list or dashboard.</div>';
+    }).catch(function(){
+      $("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">Could not remove '+esc(name)+'. Check the connection and try again.</div>';
+    }).finally(function(){b.textContent="Remove Participant";b.disabled=!activeParticipant;});
   };
 }
 
@@ -1886,6 +1911,12 @@ function enterFacilitator(){
 }
 $("rF").onclick=function(){
   var m=facMode();
+  if(!effectivePass()){
+    enterFacilitator();
+    $("passMsg").innerHTML='<div class="errbox" style="margin-top:12px"><b>Set a facilitator passcode now.</b> This public page no longer contains a readable default passcode.</div>';
+    $("newPass").focus();
+    return;
+  }
   if(m==="never"){ enterFacilitator(); return; }
   if(m==="device" && FAC && FAC.remember){ enterFacilitator(); return; }
   $("passIn").value=""; $("passRemember").checked=(m==="device"); $("passErr").style.display="none";
