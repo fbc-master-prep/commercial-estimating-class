@@ -900,8 +900,10 @@ function queueLiveSave(){ if(!participantToken&&!activeParticipant&&!autoLiveNam
 /* ---- shared online directory: how the facilitator discovers participants ----
    Stored in the exact same answers format as participant records ("1"…"n" + fbcNotes),
    since the backend accepts that shape; a plain {dir:...} key was silently rejected. */
-var DIR_KEY="Class Directory", dirRegistered=false;
+var DIR_KEY="Class Directory", dirRegistered=false, excludedParticipants={}, directoryRevision=0;
 function isDirName(n){ return String(n||"").trim().toLowerCase()===DIR_KEY.toLowerCase() || String(n||"").trim()==="__directory__"; }
+function participantKey(n){ return String(n||"").trim().toLowerCase(); }
+function isParticipantExcluded(n){ return !!excludedParticipants[participantKey(n)]; }
 function packDir(list){
   var json=JSON.stringify({dirV1:list}), size=18000, parts=[], answers={};
   for(var i=0;i<json.length;i+=size)parts.push(json.slice(i,i+size));
@@ -924,6 +926,9 @@ function registerInDirectory(name){
   fetchDirectory().catch(function(){ return []; }).then(function(list){
     var email=(S&&S.student&&S.student.email)||"";
     var i=-1; list.forEach(function(p,idx){ if(String(p.name||"").toLowerCase()===name.toLowerCase()) i=idx; });
+    /* A participant moved out of this cohort keeps their saved work, but must not
+       silently register themselves again or contribute to this dashboard. */
+    if(i>=0&&list[i].removed){ excludedParticipants[participantKey(name)]=1; dirRegistered=true; return; }
     if(i>=0 && (!email||list[i].email===email)){ dirRegistered=true; return; }
     if(i>=0) list[i].email=email; else list.push({name:name,email:email,at:Date.now()});
     return saveDirectory(list).then(function(){ dirRegistered=true; });
@@ -949,6 +954,7 @@ var cohortPoll=null;
 function cohortKey(rec){ return String((rec.student&&(rec.student.email||rec.student.name))||"").toLowerCase().trim(); }
 function mergeLiveIntoCohort(st,srvAt){
   if(!st||!st.student||!st.deliverables) return false;
+  if(isParticipantExcluded(st.student.name||st.student.email)) return false;
   var key=cohortKey(st); if(!key) return false;
   if(srvAt) st._srvAt=srvAt;
   var i=-1; cohort.forEach(function(c,idx){ if(cohortKey(c)===key) i=idx; });
@@ -980,24 +986,33 @@ function pullLiveParticipant(name){
     });
 }
 function refreshLiveCohort(){
+  var refreshRevision=directoryRevision;
   return fetchDirectory().catch(function(){ return null; }).then(function(list){
+    if(refreshRevision!==directoryRevision) return;
     if(list===null){
       var n0=$("liveCohortNote");
       if(n0) n0.innerHTML='<b>Live sync:</b> could not reach the online master record just now — retrying.';
       return;
     }
-    var newRoster=false;
+    excludedParticipants={};
+    list.forEach(function(p){ if(p.removed&&p.name) excludedParticipants[participantKey(p.name)]=1; });
+    var oldRosterLength=roster.length, oldCohortLength=cohort.length;
+    roster=roster.filter(function(p){ return !isParticipantExcluded(p.name); });
+    cohort=cohort.filter(function(p){ return !isParticipantExcluded(p.student&&(p.student.name||p.student.email)); });
+    var newRoster=roster.length!==oldRosterLength;
     list.forEach(function(p){
+      if(p.removed) return;
       if(p.name && !roster.some(function(r){ return String(r.name).toLowerCase()===String(p.name).toLowerCase(); })){
         roster.push({name:String(p.name),email:p.email||""}); newRoster=true;
       }
     });
     if(newRoster){ roster.sort(function(a,b){ return a.name.localeCompare(b.name); }); put("liveRoster",roster); renderRoster(); }
+    if(cohort.length!==oldCohortLength){ put("cohort",cohort); renderCohort(); }
     /* pull EVERY name we know about — the online directory, the uploaded roster, and anyone
        already on the dashboard — so updates arrive even if the directory itself is behind */
     var seen={}, names=[];
     function addName(n){ n=String(n||"").trim(); var k=n.toLowerCase(); if(!n||isDirName(n)||seen[k])return; seen[k]=1; names.push(n); }
-    list.forEach(function(p){ addName(p.name); });
+    list.forEach(function(p){ if(!p.removed) addName(p.name); });
     roster.forEach(function(p){ addName(p.name); });
     cohort.forEach(function(c){ addName(c.student&&c.student.name); });
     return Promise.all(names.map(function(nm){ return pullLiveParticipant(nm).catch(function(){ return false; }); }))
@@ -1758,7 +1773,7 @@ function renderRoster(){
 }
 function participantNames(){
   var seen={}, names=[];
-  function add(name){name=String(name||"").trim();var key=name.toLowerCase();if(!name||isDirName(name)||seen[key])return;seen[key]=1;names.push(name);}
+  function add(name){name=String(name||"").trim();var key=name.toLowerCase();if(!name||isDirName(name)||isParticipantExcluded(name)||seen[key])return;seen[key]=1;names.push(name);}
   roster.forEach(function(p){add(p.name);});
   cohort.forEach(function(p){add(p.student&&(p.student.name||p.student.email));});
   return names.sort(function(a,b){return a.localeCompare(b);});
@@ -1849,12 +1864,20 @@ function initLiveControls(){
     var name=activeParticipant;
     if(!name)return;
     if(!confirm('Remove "'+name+'" from the participant list and dashboard? Their saved online work and existing participant link will not be deleted.'))return;
+    directoryRevision++; /* invalidate any live refresh that began before this move */
     var b=this;b.disabled=true;b.textContent="Removing…";
     fetchDirectory().then(function(list){
       var key=name.toLowerCase();
-      return saveDirectory(list.filter(function(p){return String(p.name||"").trim().toLowerCase()!==key;}));
+      var found=false;
+      list=list.map(function(p){
+        if(String(p.name||"").trim().toLowerCase()!==key)return p;
+        found=true;return Object.assign({},p,{removed:true,removedAt:Date.now()});
+      });
+      if(!found)list.push({name:name,email:"",removed:true,removedAt:Date.now()});
+      return saveDirectory(list);
     }).then(function(){
       var key=name.toLowerCase();
+      excludedParticipants[key]=1;
       roster=roster.filter(function(p){return String(p.name||"").trim().toLowerCase()!==key;});
       cohort=cohort.filter(function(p){return String(p.student&&(p.student.name||p.student.email)||"").trim().toLowerCase()!==key;});
       put("liveRoster",roster);saveCohort();
