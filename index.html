@@ -95,6 +95,7 @@ window.CONFIG = {
   .cols{display:grid;grid-template-columns:1fr 400px;gap:18px;align-items:start}
   @media(max-width:1040px){.cols{grid-template-columns:1fr}}
   .card{scroll-margin-top:78px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:18px}
+  #facilitatorAccessCard{background:#F3F4F6}
   .card h3{font-size:15.5px}
   .cap{font-size:12.5px;color:var(--muted);margin:3px 0 14px}
   .kicker{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--brand);font-weight:700}
@@ -613,7 +614,7 @@ window.CONFIG = {
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="facilitatorAccessCard">
       <div class="kicker">Access</div>
       <h3 style="margin-top:5px">Facilitator passcode</h3>
       <div class="cap">Set your own passcode without editing the file. Saved to this copy of the workbench on this device.</div>
