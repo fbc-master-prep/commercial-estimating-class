@@ -1748,7 +1748,7 @@ function renderRoster(){
   if(document.activeElement===s) return; /* never rebuild the menu while the facilitator is choosing from it */
   s.innerHTML='<option value="">Select a participant…</option>';
   roster.forEach(function(p){var o=document.createElement("option");o.value=p.name;o.textContent=p.name+(p.email?" — "+p.email:"");s.appendChild(o);});
-  s.value=activeParticipant||"";$("participantLinkBtn").disabled=!s.value;$("exportParticipantLinkBtn").disabled=!s.value;$("refreshParticipantBtn").disabled=!s.value;
+  s.value=activeParticipant||"";$("participantLinkBtn").disabled=!s.value;$("exportParticipantLinkBtn").disabled=!(currentParticipantLink&&currentParticipantLinkName===s.value);$("refreshParticipantBtn").disabled=!s.value;
 }
 function normalizeRoster(rows){
   if(!rows.length)return[];var headers=rows[0].map(function(v){return String(v||"").trim().toLowerCase();});
@@ -1804,7 +1804,7 @@ function initLiveControls(){
   $("rosterFile").onchange=function(){if(this.files[0])loadRosterFile(this.files[0]);this.value="";};
   $("participantSelect").onchange=function(){
     clearTimeout(liveSaveT); /* cancel any pending save queued for the previous participant */
-    activeParticipant=this.value;currentParticipantLink="";currentParticipantLinkName="";$("participantLinkBtn").disabled=!activeParticipant;$("exportParticipantLinkBtn").disabled=!activeParticipant;$("refreshParticipantBtn").disabled=!activeParticipant;
+    activeParticipant=this.value;currentParticipantLink="";currentParticipantLinkName="";$("participantLinkBtn").disabled=!activeParticipant;$("exportParticipantLinkBtn").disabled=true;$("refreshParticipantBtn").disabled=!activeParticipant;
     if(livePoll){clearInterval(livePoll);livePoll=null;}
     if(!activeParticipant)return;
     fetchParticipant(activeParticipant,true).then(function(){toast("Loaded "+activeParticipant+" from the master record");})
@@ -1814,18 +1814,15 @@ function initLiveControls(){
   $("refreshParticipantBtn").onclick=function(){if(activeParticipant)fetchParticipant(activeParticipant,true).then(function(){toast("Participant record refreshed");}).catch(function(){toast("No online record yet");});};
   $("participantLinkBtn").onclick=function(){
     if(!activeParticipant)return;var b=this;b.disabled=true;b.textContent="Creating link…";
-    getParticipantLink(activeParticipant).then(function(url){return copyText(url).then(function(){
+    getParticipantLink(activeParticipant).then(function(url){$("exportParticipantLinkBtn").disabled=false;return copyText(url).then(function(){
         $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant link copied.</b><div class="liveurl">'+esc(url)+'</div></div>';});})
       .catch(function(){$("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">The participant link could not be created. Try again.</div>';})
       .finally(function(){b.textContent="Create Participant Link";b.disabled=!activeParticipant;});
   };
   $("exportParticipantLinkBtn").onclick=function(){
-    if(!activeParticipant)return;var b=this;b.disabled=true;b.textContent="Exporting…";
-    getParticipantLink(activeParticipant).then(function(url){
-      download(slug(activeParticipant)+"-participant-link.txt","Participant: "+activeParticipant+"\nParticipant link: "+url+"\n","text/plain");
-      $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant link exported.</b><div class="liveurl">'+esc(url)+'</div></div>';
-    }).catch(function(){$("participantLinkOutput").innerHTML='<div class="errbox" style="margin-top:12px">The participant link could not be exported. Try again.</div>';})
-      .finally(function(){b.textContent="Export Current Participant Link";b.disabled=!activeParticipant;});
+    if(!activeParticipant||!currentParticipantLink||currentParticipantLinkName!==activeParticipant)return;
+    download(slug(activeParticipant)+"-participant-link.txt","Participant: "+activeParticipant+"\nParticipant link: "+currentParticipantLink+"\n","text/plain");
+    $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><b>Participant link exported.</b><div class="liveurl">'+esc(currentParticipantLink)+'</div></div>';
   };
 }
 
