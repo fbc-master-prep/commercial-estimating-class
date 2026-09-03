@@ -648,7 +648,7 @@ window.CONFIG = {
 
     <div class="card" id="cgCard">
       <div class="kicker">Cohort dashboard</div>
-      <h3 style="margin-top:5px">Every deliverable × every participant</h3>
+      <h3 style="margin-top:5px">Homework 1–5 × every participant</h3>
       <div class="cap">Click a cell to open that submission. Right-click a cell to set its status directly.</div>
       <div class="gridwrap"><table class="cg" id="cg"></table></div>
       <div class="legend" id="legend2"></div>
@@ -742,6 +742,7 @@ var DELIV = [
  {n:10,label:"6",key:"audubon",t:"Audubon In-Person",reqs:[]},
  {n:11,label:"7",key:"authority",t:"Price with Authority not Anxiety",reqs:[]}
 ];
+var HOMEWORK_INDEXES=[1,2,3,4,5];
 var ST = [
  {k:"s0",g:"○",l:"Not started",c:"#D6D2CC",fg:"#4A4540"},
  {k:"s1",g:"◐",l:"Draft",c:"#fab219",fg:"#3A2B05"},
@@ -1387,8 +1388,9 @@ function renderCohort(){
   $("fN").textContent=cohort.length;
   var await_=0, behind=0, tq=0;
   cohort.forEach(function(c){
-    await_ += c.deliverables.filter(function(d){return d.status===2}).length;
-    if(c.deliverables.filter(function(d){return d.status===4}).length<=3) behind++;
+    var homework=HOMEWORK_INDEXES.map(function(i){return c.deliverables[i];}).filter(Boolean);
+    await_ += homework.filter(function(d){return d.status===2}).length;
+    if(homework.filter(function(d){return d.status===4}).length<=3) behind++;
     if(testScore(c)<6) tq++;
   });
   $("fAwait").textContent=await_; $("fBehind").textContent=behind; $("fTargets").textContent=tq;
@@ -1399,9 +1401,10 @@ function renderCohort(){
     $("legend2").innerHTML="";
     return;
   }
-  var head='<tr><th class="nm">Participant</th>'+DELIV.map(function(d){return '<th title="'+esc(d.t)+'">'+d.n+'</th>'}).join("")+'</tr>';
+  var head='<tr><th class="nm">Participant</th>'+HOMEWORK_INDEXES.map(function(si,i){return '<th title="'+esc(DELIV[si].t)+'">'+(i+1)+'</th>'}).join("")+'</tr>';
   var rows=cohort.map(function(p,pi){
-    return '<tr><td class="nm">'+esc(p.student.name||p.student.email)+'</td>'+p.deliverables.map(function(dv,si){
+    return '<tr><td class="nm">'+esc(p.student.name||p.student.email)+'</td>'+HOMEWORK_INDEXES.map(function(si){
+      var dv=p.deliverables[si];
       var st=ST[dv.status];
       return '<td><button class="cell" data-p="'+pi+'" data-s="'+si+'" style="background:'+st.c+';color:'+st.fg+(dv.status===2?';border:1px solid #2E2A26':'')+'" '+
         'title="'+esc(p.student.name)+' · '+esc(DELIV[si].t)+' · '+st.l+'">'+st.g+'</button></td>';
@@ -1422,10 +1425,11 @@ function renderCohort(){
   $("legend2").innerHTML=legendHTML();
 
   $("plist").innerHTML=cohort.map(function(p,i){
-    var submitted=p.deliverables.filter(function(d){return d.status>=2}).length;
+    var homework=HOMEWORK_INDEXES.map(function(si){return p.deliverables[si];}).filter(Boolean);
+    var submitted=homework.filter(function(d){return d.status>=2}).length;
     return '<div class="pitem" data-p="'+i+'"><span><b>'+esc(p.student.name||"—")+'</b></span>'+
-      '<span class="bar">'+p.deliverables.map(function(d){return '<i style="background:'+ST[d.status].c+'"></i>'}).join("")+'</span>'+
-      '<span style="font-size:12px;color:var(--muted)">'+submitted+'/'+DELIV.length+'</span></div>';
+      '<span class="bar">'+homework.map(function(d){return '<i style="background:'+ST[d.status].c+'"></i>'}).join("")+'</span>'+
+      '<span style="font-size:12px;color:var(--muted)">'+submitted+'/5</span></div>';
   }).join("");
   [].forEach.call(document.querySelectorAll("#plist .pitem"),function(b){
     b.onclick=function(){ var pi=+b.dataset.p; openReview(pi, firstOpen(cohort[pi])); };
@@ -1433,9 +1437,9 @@ function renderCohort(){
 
 }
 function firstOpen(p){
-  for(var i=0;i<p.deliverables.length;i++) if(p.deliverables[i].status===2) return i;
-  for(var j=p.deliverables.length-1;j>=0;j--) if(p.deliverables[j].status>0) return j;
-  return 0;
+  for(var i=0;i<HOMEWORK_INDEXES.length;i++) if(p.deliverables[HOMEWORK_INDEXES[i]].status===2) return HOMEWORK_INDEXES[i];
+  for(var j=HOMEWORK_INDEXES.length-1;j>=0;j--) if(p.deliverables[HOMEWORK_INDEXES[j]].status>0) return HOMEWORK_INDEXES[j];
+  return HOMEWORK_INDEXES[0];
 }
 function openReview(pi,si){
   revSel={p:pi,d:si};
