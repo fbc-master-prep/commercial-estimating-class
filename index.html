@@ -730,14 +730,17 @@ var PRISTINE = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
 
 /* ============================ CONTENT ============================ */
 var DELIV = [
- {n:1,t:"Homework Assignments",s:"Session 1",reqs:[]},
- {n:2,t:"Completed Homework",s:"Session 2",reqs:[]},
- {n:3,t:"Estimates",s:"Session 3",reqs:[]},
- {n:4,t:"Recorded Class Videos- in Teams Folder",s:"Session 4",reqs:[]},
- {n:5,t:"What is airless spraying and painting equipment",s:"Session 5",reqs:[]},
- {n:6,t:"Why Use Google Earth Pro",s:"Session 6",reqs:[]},
- {n:7,t:"Audubon In-Person",s:"Session 7",reqs:[]},
- {n:8,t:"Price with Authority not Anxiety",s:"Session 8",reqs:[]}
+ {n:1,label:"1",key:"assignments",t:"Homework Assignments",reqs:[]},
+ {n:2,label:"2a",key:"homework1",t:"Homework 1",reqs:[]},
+ {n:3,label:"2b",key:"homework2",t:"Homework 2",reqs:[]},
+ {n:4,label:"2c",key:"homework3",t:"Homework 3",reqs:[]},
+ {n:5,label:"2d",key:"homework4",t:"Homework 4",reqs:[]},
+ {n:6,label:"2e",key:"homework5",t:"Homework 5",reqs:[]},
+ {n:7,label:"3",key:"videos",t:"Recorded Class Videos- in Teams Folder",reqs:[]},
+ {n:8,label:"4",key:"airless",t:"What is airless spraying and painting equipment",reqs:[]},
+ {n:9,label:"5",key:"google-earth",t:"Why Use Google Earth Pro",reqs:[]},
+ {n:10,label:"6",key:"audubon",t:"Audubon In-Person",reqs:[]},
+ {n:11,label:"7",key:"authority",t:"Price with Authority not Anxiety",reqs:[]}
 ];
 var ST = [
  {k:"s0",g:"○",l:"Not started",c:"#D6D2CC",fg:"#4A4540"},
@@ -806,7 +809,7 @@ try{
 }catch(e){}
 function blankState(name,email,branch){
   return {
-    v:1, exportedAt:null,
+    v:2, exportedAt:null,
     student:{name:name,email:email,branch:branch,cohort:CFG.cohort},
     property:{name:"",addr:"",units:0,bldgs:0,types:0,stories:3,year:"",painted:"",sub:"",dist:0,mgmt:"",owner:"",kind:"Garden-style (2–3 story)",
               occ:false,fail:false,unsold:false,access:false},
@@ -816,6 +819,28 @@ function blankState(name,email,branch){
     calc:{total:0,rent:0,turns:0,daysSaved:1,cap:5.5,allow:0,used:0,bdone:0,up:0},
     rubric:{}
   };
+}
+function blankDeliverable(d){
+  return {n:d.n,status:0,checks:d.reqs.map(function(){return false}),notes:"",files:[],submittedAt:null,feedback:""};
+}
+function normalizeState(st){
+  if(!st||!Array.isArray(st.deliverables)) return st;
+  if(st.v>=2&&st.deliverables.length===DELIV.length){
+    st.deliverables.forEach(function(d,i){d.n=i+1;});
+    return st;
+  }
+  var old=st.deliverables, next;
+  if(old.length===8){
+    next=[old[0],old[1],blankDeliverable(DELIV[2]),blankDeliverable(DELIV[3]),blankDeliverable(DELIV[4]),blankDeliverable(DELIV[5]),
+      old[3],old[4],old[5],old[6],old[7]];
+    if(old[2]&&(old[2].status||old[2].notes||(old[2].files&&old[2].files.length))) st.removedEstimates=old[2];
+  }else{
+    next=DELIV.map(function(d,i){return old[i]||blankDeliverable(d);});
+  }
+  next.forEach(function(d,i){d.n=i+1;});
+  st.deliverables=next;
+  st.v=2;
+  return st;
 }
 var saveT=null;
 var attachWarned=false;
@@ -868,7 +893,7 @@ function decodeLiveState(answers){
   if(!answers||String(answers.fbcNotes||"").indexOf("__COMMERCIAL_CLASS_V1__:")!==0)return null;
   var count=parseInt(String(answers.fbcNotes).split(":")[1],10)||0, json="";
   for(var i=1;i<=count;i++)json+=String(answers[String(i)]||answers[i]||"");
-  try{return JSON.parse(json);}catch(e){return null;}
+  try{return normalizeState(JSON.parse(json));}catch(e){return null;}
 }
 function autoLiveName(){
   /* Any participant who has entered their name syncs automatically under it —
@@ -1108,7 +1133,7 @@ function renderTrack(){
   $("track").innerHTML = DELIV.map(function(d,i){
     var dv=S.deliverables[i], nf=dv.files.length;
     return '<button class="drow" data-i="'+i+'" aria-current="'+(i===selD)+'">'+
-      '<span class="no">'+d.n+'</span>'+
+      '<span class="no">'+esc(d.label||d.n)+'</span>'+
       '<span><span class="ti">'+esc(d.t)+'</span></span>'+
       '<span class="chipbtn" role="button" tabindex="0" data-chip="'+i+'" title="Click to change status">'+chip(dv.status)+'</span>'+
       '<span class="fi">'+nf+(nf===1?" file":" files")+'</span></button>';
@@ -1155,11 +1180,11 @@ function openFile(f){
 }
 function renderDeposit(){
   var d=DELIV[selD], dv=S.deliverables[selD];
-  $("dKicker").textContent=d.s+" deliverable";
+  $("dKicker").textContent="Deliverable "+(d.label||d.n);
   $("dTitle").textContent=d.t;
   $("dCap").innerHTML="Status: "+chip(dv.status)+(dv.submittedAt?' <span style="color:var(--muted)">· submitted '+new Date(dv.submittedAt).toLocaleDateString()+'</span>':"");
-  $("fileIn").accept = d.n===4 ? ".mp4,video/mp4" : "";
-  $("fileTypes").textContent = d.n===4 ? "MP4 video files" : "PDFs, photos, spreadsheets, documents";
+  $("fileIn").accept = d.key==="videos" ? ".mp4,video/mp4" : "";
+  $("fileTypes").textContent = d.key==="videos" ? "MP4 video files" : "PDFs, photos, spreadsheets, documents";
   $("notes").value=dv.notes||"";
   [].forEach.call(document.querySelectorAll("#statusSeg button"),function(b){
     b.setAttribute("aria-pressed", String(+b.dataset.st===dv.status));
@@ -1323,7 +1348,7 @@ function attachFiles(list){
   if(!pending) return;
   [].forEach.call(list,function(f){
     var isMp4=/\.mp4$/i.test(f.name)||f.type==="video/mp4";
-    var maxSize=(DELIV[selD].n===4&&isMp4)?500*1024*1024:12*1024*1024;
+    var maxSize=(DELIV[selD].key==="videos"&&isMp4)?500*1024*1024:12*1024*1024;
     if(f.size > maxSize){
       dv.files.push({name:f.name,size:f.size,data:null,note:"too large to embed"});
       if(!--pending) finish(); return;
@@ -1343,6 +1368,7 @@ function attachFiles(list){
 
 /* ============================ FACILITATOR ============================ */
 function upsert(rec){
+  rec=normalizeState(rec);
   if(!rec || !rec.student) return false;
   var key=(rec.student.email||rec.student.name||"").toLowerCase().trim();
   if(!key) return false;
@@ -1415,7 +1441,7 @@ function openReview(pi,si){
   revSel={p:pi,d:si};
   var p=cohort[pi], dv=p.deliverables[si], d=DELIV[si];
   $("revTitle").textContent=(p.student.name||"—")+" — "+d.t;
-  $("revMeta").innerHTML=chip(dv.status)+' <span style="color:var(--muted)">· '+d.s+' · '+esc(p.property.name||"no property")+
+  $("revMeta").innerHTML=chip(dv.status)+' <span style="color:var(--muted)">· Deliverable '+esc(d.label||d.n)+' · '+esc(p.property.name||"no property")+
     (dv.submittedAt?' · submitted '+new Date(dv.submittedAt).toLocaleDateString():'')+'</span>';
   $("revChecks").innerHTML='<h4 style="font-size:13px;margin-top:12px">Self-reported requirements</h4><div class="tests" style="margin-top:8px">'+
     d.reqs.map(function(r,i){return '<div><span class="'+(dv.checks[i]?"y":"n")+'">'+(dv.checks[i]?"✓":"✕")+'</span>'+esc(r)+'</div>'}).join("")+'</div>';
@@ -1470,7 +1496,7 @@ function readEmbedded(){
   if(!el) return null;
   var t=(el.textContent||"").trim();
   if(!t||t==="null") return null;
-  try{ var j=JSON.parse(t); return (j&&j.student&&j.deliverables)?j:null; }catch(e){ return null; }
+  try{ var j=JSON.parse(t); return (j&&j.student&&j.deliverables)?normalizeState(j):null; }catch(e){ return null; }
 }
 
 function saveFilledCopy(){
@@ -1608,7 +1634,7 @@ function exportGrades(){
   download(slug(p.student.name)+"-graded.json", g);
 }
 function exportCSV(){
-  var rows=[["Participant","Email","Property","Units","Target score"].concat(DELIV.map(function(d){return "D"+d.n})).concat(["Approved","Rubric total"])];
+  var rows=[["Participant","Email","Property","Units","Target score"].concat(DELIV.map(function(d){return "D"+(d.label||d.n)})).concat(["Approved","Rubric total"])];
   cohort.forEach(function(p){
     var t=0,any=false; RUBRIC.forEach(function(r,i){ if(p.rubric&&p.rubric[i]!=null){t+=p.rubric[i];any=true;} });
     rows.push([p.student.name,p.student.email,p.property.name,p.property.units,testScore(p)+"/8"]
@@ -1720,7 +1746,7 @@ $("suGo").onclick=function(){
 };
 $("suImport").onclick=function(){ $("suFile").click(); };
 $("suFile").onchange=function(){ var f=this.files[0]; if(!f) return;
-  readJSON(f).then(function(j){ if(j && j.student){ entered=true; S=j; save(); boot(); } else alert("That doesn't look like a workbench file."); })
+  readJSON(f).then(function(j){ if(j && j.student){ entered=true; S=normalizeState(j); save(); boot(); } else alert("That doesn't look like a workbench file."); })
   .catch(function(){ alert("Could not read that file."); });
 };
 
@@ -1746,7 +1772,7 @@ $("expLight").onclick=function(){ exportSubmission(false); };
 $("expBackup").onclick=function(){ var o=JSON.parse(JSON.stringify(S)); o.type="submission"; o.exportedAt=Date.now(); download(slug(S.student.name)+"-backup.json",o); };
 $("impBackup").onclick=function(){ $("backupFile").click(); };
 $("backupFile").onchange=function(){ var f=this.files[0]; if(!f)return;
-  readJSON(f).then(function(j){ if(j&&j.student){ entered=true; S=j; save(); boot(); showTab("tabWork"); } else alert("Not a workbench file."); }).catch(function(){alert("Could not read that file.")}); };
+  readJSON(f).then(function(j){ if(j&&j.student){ entered=true; S=normalizeState(j); save(); boot(); showTab("tabWork"); } else alert("Not a workbench file."); }).catch(function(){alert("Could not read that file.")}); };
 $("impGrades").onclick=function(){ $("gradeFile").click(); };
 $("gradeFile").onchange=function(){ var f=this.files[0]; if(!f)return;
   readJSON(f).then(function(j){ var r=applyGrades(j);
@@ -2021,7 +2047,7 @@ idbOpen().then(function(db){
   else { try{ localStorage.setItem("mfclass_probe_"+WS,"1"); localStorage.removeItem("mfclass_probe_"+WS); storeMode="local"; }catch(e){ storeMode="memory"; } }
   return Promise.all([get("state"),get("cohort"),get("fac"),get("fh"),get("fhName")]);
 }).then(function(r){
-  var local=r[0]; cohort=r[1]||[]; FAC=r[2]||null;
+  var local=normalizeState(r[0]); cohort=(r[1]||[]).map(normalizeState); FAC=r[2]||null;
   initLiveControls();
   fileHandle=r[3]||null; linkedName=r[4]||"";
   var embedded=readEmbedded();
@@ -2030,7 +2056,7 @@ idbOpen().then(function(db){
     var picks=[];
     if(local)    picks.push({src:"this computer", st:local});
     if(embedded) picks.push({src:"the file itself", st:embedded});
-    if(linked)   picks.push({src:"the linked data file", st:linked});
+    if(linked)   picks.push({src:"the linked data file", st:normalizeState(linked)});
     if(!picks.length){ S=null; if(participantToken){fetchParticipant("",false).catch(function(){boot();});}else boot(); return; }
     picks.sort(function(a,b){ return (b.st.savedAt||b.st.exportedAt||0)-(a.st.savedAt||a.st.exportedAt||0); });
     S=picks[0].st;
