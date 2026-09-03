@@ -608,7 +608,6 @@ window.CONFIG = {
       <div id="importMsg"></div>
       <div class="row" style="margin-top:12px">
         <button class="btn s" id="expCsv">Export cohort CSV</button>
-        <button class="btn s" id="expCohort">Save cohort file</button>
         <button class="btn s" id="impCohort">Load cohort file</button>
         <input type="file" id="cohortFile" accept=".json" class="hide">
         <button class="btn d" id="clearCohort">Clear cohort</button>
@@ -1990,7 +1989,6 @@ function importFiles(list){
 wireDrop($("fdrop"), importFiles);
 $("fFileIn").onchange=function(){ importFiles(this.files); this.value=""; };
 $("expCsv").onclick=exportCSV;
-$("expCohort").onclick=function(){ download(slug(CFG.cohort)+"-cohort.json",{type:"cohort",cohort:CFG.cohort,at:Date.now(),records:cohort}); };
 $("impCohort").onclick=function(){ $("cohortFile").click(); };
 $("cohortFile").onchange=function(){ var f=this.files[0]; if(!f)return;
   readJSON(f).then(function(j){ if(j&&j.records){ j.records.forEach(upsert); saveCohort(); renderCohort();
