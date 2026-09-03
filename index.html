@@ -1109,7 +1109,7 @@ function renderTrack(){
     var dv=S.deliverables[i], nf=dv.files.length;
     return '<button class="drow" data-i="'+i+'" aria-current="'+(i===selD)+'">'+
       '<span class="no">'+d.n+'</span>'+
-      '<span><span class="ti">'+esc(d.t)+'</span><br><span class="de">'+d.s+'</span></span>'+
+      '<span><span class="ti">'+esc(d.t)+'</span></span>'+
       '<span class="chipbtn" role="button" tabindex="0" data-chip="'+i+'" title="Click to change status">'+chip(dv.status)+'</span>'+
       '<span class="fi">'+nf+(nf===1?" file":" files")+'</span></button>';
   }).join("");
