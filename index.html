@@ -311,7 +311,7 @@ window.CONFIG = {
             <div class="cap" id="dCap"></div>
             <div class="drop" id="drop">
               <b>Drop files here</b> or <label style="color:var(--brand-dk);text-decoration:underline;cursor:pointer">browse<input type="file" multiple id="fileIn" class="hide"></label><br>
-              <span style="font-size:12px">PDFs, photos, spreadsheets, documents</span>
+              <span style="font-size:12px" id="fileTypes">PDFs, photos, spreadsheets, documents</span>
             </div>
             <div class="files" id="fileList"></div>
             <label class="fl" style="margin-top:16px">Notes for your facilitator</label>
@@ -1155,6 +1155,8 @@ function renderDeposit(){
   $("dKicker").textContent=d.s+" deliverable";
   $("dTitle").textContent=d.t;
   $("dCap").innerHTML="Status: "+chip(dv.status)+(dv.submittedAt?' <span style="color:var(--muted)">· submitted '+new Date(dv.submittedAt).toLocaleDateString()+'</span>':"");
+  $("fileIn").accept = d.n===4 ? ".mp4,video/mp4" : "";
+  $("fileTypes").textContent = d.n===4 ? "MP4 video files" : "PDFs, photos, spreadsheets, documents";
   $("notes").value=dv.notes||"";
   [].forEach.call(document.querySelectorAll("#statusSeg button"),function(b){
     b.setAttribute("aria-pressed", String(+b.dataset.st===dv.status));
@@ -1317,7 +1319,9 @@ function attachFiles(list){
   var dv=S.deliverables[selD], pending=list.length;
   if(!pending) return;
   [].forEach.call(list,function(f){
-    if(f.size > 12*1024*1024){
+    var isMp4=/\.mp4$/i.test(f.name)||f.type==="video/mp4";
+    var maxSize=(DELIV[selD].n===4&&isMp4)?500*1024*1024:12*1024*1024;
+    if(f.size > maxSize){
       dv.files.push({name:f.name,size:f.size,data:null,note:"too large to embed"});
       if(!--pending) finish(); return;
     }
