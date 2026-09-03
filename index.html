@@ -550,14 +550,9 @@ window.CONFIG = {
 
         <div>
           <div class="card">
-            <div class="kicker">Backup &amp; restore</div>
+            <div class="kicker">Local storage</div>
             <h3 style="margin-top:5px">Your work lives on this computer</h3>
-            <div class="cap">Auto-saved in this browser. Back it up before switching machines, clearing browsing data, or if you're at all unsure.</div>
-            <div class="row">
-              <button class="btn s" id="expBackup">Download backup</button>
-              <button class="btn s" id="impBackup">Restore from backup</button>
-              <input type="file" id="backupFile" accept=".json" class="hide">
-            </div>
+            <div class="cap">Your work is auto-saved in this browser.</div>
             <div class="out" style="margin-top:12px">
               <div class="hi" id="wsName">—</div>
               <div class="dim">This workbench's private storage. Rename the file and you get a brand-new, separate workbench.</div>
@@ -1773,10 +1768,6 @@ $("openLinked").onclick=function(){ openLinkedFile(); };
 $("unlinkFile").onclick=function(){ unlink(); };
 $("expAll").onclick=function(){ exportSubmission(true); };
 $("expLight").onclick=function(){ exportSubmission(false); };
-$("expBackup").onclick=function(){ var o=JSON.parse(JSON.stringify(S)); o.type="submission"; o.exportedAt=Date.now(); download(slug(S.student.name)+"-backup.json",o); };
-$("impBackup").onclick=function(){ $("backupFile").click(); };
-$("backupFile").onchange=function(){ var f=this.files[0]; if(!f)return;
-  readJSON(f).then(function(j){ if(j&&j.student){ entered=true; S=normalizeState(j); save(); boot(); showTab("tabWork"); } else alert("Not a workbench file."); }).catch(function(){alert("Could not read that file.")}); };
 $("impGrades").onclick=function(){ $("gradeFile").click(); };
 $("gradeFile").onchange=function(){ var f=this.files[0]; if(!f)return;
   readJSON(f).then(function(j){ var r=applyGrades(j);
