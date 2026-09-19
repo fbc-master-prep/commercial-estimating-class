@@ -221,6 +221,9 @@ window.CONFIG = {
   .pitem{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:13px}
   .pitem:hover{border-color:var(--brand)}
   .pitem b{font-size:13.5px}
+  .participant-page{border:0;background:transparent;padding:2px 0;color:var(--brand-dk);font:inherit;font-weight:600;text-align:left;text-decoration:underline;text-underline-offset:3px}
+  .participant-page:hover{color:var(--brand)}
+  .participant-page:focus-visible{outline:2px solid var(--brand);outline-offset:3px;border-radius:2px}
   .pitem .sm{font-size:11.5px;color:var(--muted)}
   .bar{display:flex;gap:2px}
   .bar i{width:10px;height:16px;border-radius:2px;display:block}
@@ -760,7 +763,10 @@ var WS = (function(){
   try{ f=decodeURIComponent((location.pathname||"").split("/").pop()||""); }catch(e){ f=""; }
   f=f.replace(/\.x?html?$/i,"");
   if(!f) f="workbench";
-  return f.toLowerCase().replace(/[^a-z0-9._-]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "workbench";
+  var workspace=f.toLowerCase().replace(/[^a-z0-9._-]+/g,"-").replace(/^-|-$/g,"").slice(0,60) || "workbench";
+  /* Individual tabs must not read or overwrite another participant's local work. */
+  var token=new URLSearchParams(location.search).get("participant")||"";
+  return workspace+(/^[a-f0-9-]{36}$/i.test(token)?"-participant-"+token.toLowerCase():"");
 })();
 function K(k){ return WS+"::"+k; }
 function idbOpen(){
@@ -1398,7 +1404,7 @@ function renderCohort(){
   }
   var head='<tr><th class="nm">Participant</th>'+HOMEWORK_INDEXES.map(function(si,i){return '<th title="'+esc(DELIV[si].t)+'">'+(i+1)+'</th>'}).join("")+'</tr>';
   var rows=cohort.map(function(p,pi){
-    return '<tr><td class="nm">'+esc(p.student.name||p.student.email)+'</td>'+HOMEWORK_INDEXES.map(function(si){
+    return '<tr><td class="nm"><button type="button" class="participant-page" data-name="'+esc(p.student.name||p.student.email)+'" title="Open participant page in a new tab">'+esc(p.student.name||p.student.email)+'</button></td>'+HOMEWORK_INDEXES.map(function(si){
       var dv=p.deliverables[si];
       var st=ST[dv.status];
       return '<td><button class="cell" data-p="'+pi+'" data-s="'+si+'" style="background:'+st.c+';color:'+st.fg+(dv.status===2?';border:1px solid #2E2A26':'')+'" '+
@@ -1422,12 +1428,15 @@ function renderCohort(){
   $("plist").innerHTML=cohort.map(function(p,i){
     var homework=HOMEWORK_INDEXES.map(function(si){return p.deliverables[si];}).filter(Boolean);
     var submitted=homework.filter(function(d){return d.status>=2}).length;
-    return '<div class="pitem" data-p="'+i+'"><span><b>'+esc(p.student.name||"—")+'</b></span>'+
+    return '<div class="pitem" data-p="'+i+'"><span><button type="button" class="participant-page" data-name="'+esc(p.student.name||p.student.email)+'" title="Open participant page in a new tab">'+esc(p.student.name||p.student.email||"—")+'</button></span>'+
       '<span class="bar">'+homework.map(function(d){return '<i style="background:'+ST[d.status].c+'"></i>'}).join("")+'</span>'+
       '<span style="font-size:12px;color:var(--muted)">'+submitted+'/5</span></div>';
   }).join("");
   [].forEach.call(document.querySelectorAll("#plist .pitem"),function(b){
     b.onclick=function(){ var pi=+b.dataset.p; openReview(pi, firstOpen(cohort[pi])); };
+  });
+  [].forEach.call(document.querySelectorAll("#cg .participant-page, #plist .participant-page"),function(b){
+    b.onclick=function(ev){ev.stopPropagation();openParticipantPage(b.dataset.name);};
   });
 
 }
@@ -1854,6 +1863,22 @@ function getParticipantLink(name){
       return currentParticipantLink;
     });
 }
+function openParticipantPage(name){
+  if(!name)return;
+  /* Open synchronously so browsers allow the tab while the link is fetched. */
+  var tab=window.open("about:blank","_blank");
+  if(tab)tab.opener=null;
+  toast("Opening "+name+"…");
+  return getParticipantLink(name).then(function(url){
+    if(tab&&!tab.closed){tab.location.replace(url);return;}
+    $("participantLinkOutput").innerHTML='<div class="okbox" style="margin-top:12px"><a href="'+esc(url)+'" target="_blank" rel="noopener">Open '+esc(name)+'’s individual page</a> (opens in a new tab)</div>';
+    $("participantLinkOutput").scrollIntoView({behavior:"smooth",block:"center"});
+    toast("Use the participant link shown below to open the page.");
+  }).catch(function(){
+    if(tab&&!tab.closed)tab.close();
+    toast("Could not open "+name+"’s page. Check the connection and try again.",true);
+  });
+}
 function initLiveControls(){
   get("liveRoster").then(function(r){roster=r||[];renderRoster();});
   get("liveInstructor").then(function(n){if(n)$("instructorName").value=n;});
@@ -1865,6 +1890,7 @@ function initLiveControls(){
     activeParticipant=this.value;currentParticipantLink="";currentParticipantLinkName="";$("participantLinkBtn").disabled=!activeParticipant;$("refreshParticipantBtn").disabled=!activeParticipant;$("removeParticipantBtn").disabled=!activeParticipant;
     if(livePoll){clearInterval(livePoll);livePoll=null;}
     if(!activeParticipant)return;
+    openParticipantPage(activeParticipant);
     fetchParticipant(activeParticipant,true).then(function(){toast("Loaded "+activeParticipant+" from the master record");})
       .catch(function(){toast("No saved work yet for "+activeParticipant);});
     livePoll=setInterval(function(){fetchParticipant(activeParticipant,true).catch(function(){});},3000);
