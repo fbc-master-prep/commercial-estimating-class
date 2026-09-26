@@ -230,6 +230,11 @@ window.CONFIG = {
   .livegrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end}
   .liveactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   .liveurl{margin-top:10px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--tint);font-size:12px;word-break:break-all}
+  .homework-links{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:10px;overflow-x:auto;margin:14px 0;padding:3px}
+  .homework-link-box{border:1px solid var(--line);border-radius:9px;padding:12px;background:var(--tint)}
+  .homework-link-box input{width:100%;min-width:0;margin:7px 0;padding:8px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:12px}
+  .homework-link-status{font-size:12px;color:var(--muted);margin-top:7px;min-height:36px}
+  .homework-assignment{padding:12px;border:1px solid var(--sage);border-radius:9px;margin-bottom:12px;background:var(--tint);overflow-wrap:anywhere}
   @media(max-width:700px){.livegrid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -315,6 +320,7 @@ window.CONFIG = {
             <div class="kicker" id="dKicker">—</div>
             <h3 style="margin-top:5px" id="dTitle">—</h3>
             <div class="cap" id="dCap"></div>
+            <div id="homeworkAssignment" class="homework-assignment hide" aria-live="polite"></div>
             <div class="drop" id="drop">
               <b>Drop files here</b> or <label style="color:var(--brand-dk);text-decoration:underline;cursor:pointer">browse<input type="file" multiple id="fileIn" class="hide"></label><br>
               <span style="font-size:12px" id="fileTypes">PDFs, photos, spreadsheets, documents</span>
@@ -648,6 +654,8 @@ window.CONFIG = {
       <div class="kicker">Cohort dashboard</div>
       <h3 style="margin-top:5px">Homework 1–5 × every participant</h3>
       <div class="cap">Click a cell to open that submission. Right-click a cell to set its status directly.</div>
+      <div class="homework-links" id="homeworkLinks" aria-label="Homework assignment links"></div>
+      <div class="cap">Paste an assignment link and click Post link to share it with all participants under that homework number. To remove a link, empty its box and click Post link.</div>
       <div class="gridwrap"><table class="cg" id="cg"></table></div>
       <div class="legend" id="legend2"></div>
     </div>
@@ -930,7 +938,7 @@ function queueLiveSave(){ if(!participantToken&&!activeParticipant&&!autoLiveNam
    Stored in the exact same answers format as participant records ("1"…"n" + fbcNotes),
    since the backend accepts that shape; a plain {dir:...} key was silently rejected. */
 var DIR_KEY="Class Directory", dirRegistered=false, excludedParticipants={}, directoryRevision=0;
-function isDirName(n){ return String(n||"").trim().toLowerCase()===DIR_KEY.toLowerCase() || String(n||"").trim()==="__directory__"; }
+function isDirName(n){ return String(n||"").trim().toLowerCase()===DIR_KEY.toLowerCase() || String(n||"").trim()==="__directory__" || /^__class_homework_link_[1-5]__$/i.test(String(n||"").trim()); }
 function participantKey(n){ return String(n||"").trim().toLowerCase(); }
 function isParticipantExcluded(n){ return !!excludedParticipants[participantKey(n)]; }
 function packDir(list){
@@ -1182,6 +1190,7 @@ function openFile(f){
 }
 function renderDeposit(){
   var d=DELIV[selD], dv=S.deliverables[selD];
+  renderHomeworkAssignment();
   $("dKicker").textContent="Deliverable "+(d.label||d.n);
   $("dTitle").textContent=d.t;
   $("dCap").innerHTML="Status: "+chip(dv.status)+(dv.submittedAt?' <span style="color:var(--muted)">· submitted '+new Date(dv.submittedAt).toLocaleDateString()+'</span>':"");
@@ -2061,7 +2070,87 @@ document.addEventListener("keydown",function(e){
   }
 });
 
+/* Shared assignments live separately from participant work: posting never changes
+   submissions, notes, files, feedback or status. Each number has its own record. */
+var homeworkLinks=["","","","",""], homeworkLoaded=[false,false,false,false,false];
+var homeworkDirty=[false,false,false,false,false], homeworkSaving=[false,false,false,false,false];
+var homeworkRevision=[0,0,0,0,0], homeworkRefreshing=false;
+function homeworkRecord(i){return "__class_homework_link_"+(i+1)+"__";}
+function validHomeworkUrl(value){
+  var raw=String(value||"").trim();
+  if(!raw)return "";
+  var url;try{url=new URL(raw);}catch(e){throw new Error("Use a complete https:// or http:// link.");}
+  if(!/^https?:$/.test(url.protocol)||url.username||url.password)throw new Error("Use a complete https:// or http:// link.");
+  if(raw.length>8000)throw new Error("This link is too long. Use a shorter sharing link.");
+  return url.href;
+}
+function renderHomeworkAssignment(){
+  var box=$("homeworkAssignment"), i=HOMEWORK_INDEXES.indexOf(selD);
+  if(!box)return;
+  box.classList.toggle("hide",i<0);
+  if(i<0){box.innerHTML="";return;}
+  if(!homeworkLoaded[i]){box.textContent="Homework assignment link is loading. If it does not appear, check your connection.";return;}
+  box.innerHTML=homeworkLinks[i]?'<b>Homework '+(i+1)+' assignment</b><br><a href="'+esc(homeworkLinks[i])+'" target="_blank" rel="noopener noreferrer">Open Homework '+(i+1)+' assignment ↗</a>':'Your facilitator has not posted a link for Homework '+(i+1)+' yet.';
+}
+function syncHomeworkBox(i){
+  if(homeworkDirty[i]||homeworkSaving[i])return;
+  $("homeworkUrl"+i).value=homeworkLinks[i];
+  $("homeworkStatus"+i).textContent=homeworkLinks[i]?"Posted for all participants.":"No link posted.";
+}
+function refreshHomeworkLinks(){
+  if(homeworkRefreshing)return Promise.resolve();
+  homeworkRefreshing=true;
+  return Promise.all(homeworkLinks.map(function(_,i){
+    var revision=homeworkRevision[i];
+    var url=CLASS_SHARED_API+"?id="+encodeURIComponent(sharedSheetId)+"&fbc="+encodeURIComponent(CLASS_FBC)+"&franchise="+encodeURIComponent(homeworkRecord(i));
+    return fetch(url,{cache:"no-store"}).then(function(r){
+      if(r.status===404)return null;
+      if(!r.ok)throw new Error("load");
+      return r.json();
+    }).then(function(data){
+      if(revision!==homeworkRevision[i]||homeworkSaving[i])return;
+      var record=data&&decodeLiveState(data.answers);
+      if(data&&Object.keys(data.answers||{}).length&&(!record||record.homeworkLinkV1!==i+1))throw new Error("record");
+      homeworkLinks[i]=validHomeworkUrl(record&&record.url||"");homeworkLoaded[i]=true;
+      syncHomeworkBox(i);
+    }).catch(function(){
+      if(revision===homeworkRevision[i]&&!homeworkDirty[i]&&!homeworkSaving[i])$("homeworkStatus"+i).textContent="Could not refresh. Retrying automatically.";
+    });
+  })).then(function(){renderHomeworkAssignment();}).finally(function(){homeworkRefreshing=false;});
+}
+function postHomeworkLink(i){
+  if(homeworkSaving[i])return Promise.resolve();
+  var value;
+  try{value=validHomeworkUrl($("homeworkUrl"+i).value);}catch(e){$("homeworkStatus"+i).textContent=e.message;return Promise.resolve();}
+  homeworkSaving[i]=true;homeworkRevision[i]++;
+  $("homeworkUrl"+i).disabled=true;
+  $("homeworkPost"+i).disabled=true;$("homeworkStatus"+i).textContent="Posting…";
+  return fetch(CLASS_SHARED_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    id:sharedSheetId,fbc:CLASS_FBC,franchise:homeworkRecord(i),
+    answers:encodeLiveState({homeworkLinkV1:i+1,url:value})
+  })}).then(function(r){
+    if(!r.ok)throw new Error("save");
+    homeworkLinks[i]=value;homeworkLoaded[i]=true;homeworkDirty[i]=false;
+    $("homeworkUrl"+i).value=value;
+    $("homeworkStatus"+i).textContent=value?"Posted for all participants.":"Link removed for all participants.";
+    renderHomeworkAssignment();
+  }).catch(function(){
+    $("homeworkStatus"+i).textContent="Not posted. Check your connection and click Post link again.";
+  }).finally(function(){homeworkSaving[i]=false;$("homeworkPost"+i).disabled=false;$("homeworkUrl"+i).disabled=false;});
+}
+function initHomeworkLinks(){
+  $("homeworkLinks").innerHTML=homeworkLinks.map(function(_,i){return '<div class="homework-link-box"><label class="fl" for="homeworkUrl'+i+'">Homework '+(i+1)+'</label><input type="url" id="homeworkUrl'+i+'" placeholder="Paste homework link" aria-describedby="homeworkStatus'+i+'"><button type="button" class="btn p" id="homeworkPost'+i+'">Post link</button><div class="homework-link-status" id="homeworkStatus'+i+'" role="status">Loading…</div></div>';}).join("");
+  homeworkLinks.forEach(function(_,i){
+    $("homeworkUrl"+i).oninput=function(){homeworkDirty[i]=true;$("homeworkStatus"+i).textContent="Not posted yet.";};
+    $("homeworkPost"+i).onclick=function(){postHomeworkLink(i);};
+  });
+  refreshHomeworkLinks();
+  setInterval(function(){if(!document.hidden)refreshHomeworkLinks();},15000);
+  window.addEventListener("focus",refreshHomeworkLinks);
+}
+
 /* ============================ START ============================ */
+initHomeworkLinks();
 idbOpen().then(function(db){
   DB=db;
   if(DB) storeMode="idb";
