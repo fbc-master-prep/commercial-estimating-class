@@ -655,7 +655,7 @@ window.CONFIG = {
       <h3 style="margin-top:5px">Homework 1–5 × every participant</h3>
       <div class="cap">Click a cell to open that submission. Right-click a cell to set its status directly.</div>
       <div class="homework-links" id="homeworkLinks" aria-label="Homework assignment links"></div>
-      <div class="cap">Paste an assignment link and click Post link to share it with all participants under that homework number. To remove a link, empty its box and click Post link.</div>
+      <div class="cap">Paste or change an assignment link, then click Update link to share it with all participants. To remove an assignment link everywhere, clear its box and click Update link. Open participant pages update automatically within 15 seconds while online.</div>
       <div class="gridwrap"><table class="cg" id="cg"></table></div>
       <div class="legend" id="legend2"></div>
     </div>
@@ -2124,7 +2124,7 @@ function postHomeworkLink(i){
   try{value=validHomeworkUrl($("homeworkUrl"+i).value);}catch(e){$("homeworkStatus"+i).textContent=e.message;return Promise.resolve();}
   homeworkSaving[i]=true;homeworkRevision[i]++;
   $("homeworkUrl"+i).disabled=true;
-  $("homeworkPost"+i).disabled=true;$("homeworkStatus"+i).textContent="Posting…";
+  $("homeworkPost"+i).disabled=true;$("homeworkStatus"+i).textContent=value?"Updating link…":"Removing link everywhere…";
   return fetch(CLASS_SHARED_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
     id:sharedSheetId,fbc:CLASS_FBC,franchise:homeworkRecord(i),
     answers:encodeLiveState({homeworkLinkV1:i+1,url:value})
@@ -2135,13 +2135,13 @@ function postHomeworkLink(i){
     $("homeworkStatus"+i).textContent=value?"Posted for all participants.":"Link removed for all participants.";
     renderHomeworkAssignment();
   }).catch(function(){
-    $("homeworkStatus"+i).textContent="Not posted. Check your connection and click Post link again.";
+    $("homeworkStatus"+i).textContent="Not updated. Check your connection and click Update link again.";
   }).finally(function(){homeworkSaving[i]=false;$("homeworkPost"+i).disabled=false;$("homeworkUrl"+i).disabled=false;});
 }
 function initHomeworkLinks(){
-  $("homeworkLinks").innerHTML=homeworkLinks.map(function(_,i){return '<div class="homework-link-box"><label class="fl" for="homeworkUrl'+i+'">Homework '+(i+1)+'</label><input type="url" id="homeworkUrl'+i+'" placeholder="Paste homework link" aria-describedby="homeworkStatus'+i+'"><button type="button" class="btn p" id="homeworkPost'+i+'">Post link</button><div class="homework-link-status" id="homeworkStatus'+i+'" role="status">Loading…</div></div>';}).join("");
+  $("homeworkLinks").innerHTML=homeworkLinks.map(function(_,i){return '<div class="homework-link-box"><label class="fl" for="homeworkUrl'+i+'">Homework '+(i+1)+'</label><input type="url" id="homeworkUrl'+i+'" placeholder="Paste homework link" aria-describedby="homeworkStatus'+i+'"><button type="button" class="btn p" id="homeworkPost'+i+'" aria-label="Update Homework '+(i+1)+' link">Update link</button><div class="homework-link-status" id="homeworkStatus'+i+'" role="status">Loading…</div></div>';}).join("");
   homeworkLinks.forEach(function(_,i){
-    $("homeworkUrl"+i).oninput=function(){homeworkDirty[i]=true;$("homeworkStatus"+i).textContent="Not posted yet.";};
+    $("homeworkUrl"+i).oninput=function(){homeworkDirty[i]=true;$("homeworkStatus"+i).textContent=this.value.trim()?"Click Update link to save changes.":"Click Update link to remove this link everywhere.";};
     $("homeworkPost"+i).onclick=function(){postHomeworkLink(i);};
   });
   refreshHomeworkLinks();
