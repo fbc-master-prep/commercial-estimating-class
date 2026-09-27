@@ -736,19 +736,19 @@ var PRISTINE = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
 
 /* ============================ CONTENT ============================ */
 var DELIV = [
- {n:1,label:"1",key:"assignments",t:"Homework Assignments",reqs:[]},
- {n:2,label:"2a",key:"homework1",t:"Homework 1",reqs:[]},
- {n:3,label:"2b",key:"homework2",t:"Homework 2",reqs:[]},
- {n:4,label:"2c",key:"homework3",t:"Homework 3",reqs:[]},
- {n:5,label:"2d",key:"homework4",t:"Homework 4",reqs:[]},
- {n:6,label:"2e",key:"homework5",t:"Homework 5",reqs:[]},
- {n:7,label:"3",key:"videos",t:"Recorded Class Videos- in Teams Folder",reqs:[]},
- {n:8,label:"4",key:"airless",t:"What is airless spraying and painting equipment",reqs:[]},
- {n:9,label:"5",key:"google-earth",t:"Why Use Google Earth Pro",reqs:[]},
- {n:10,label:"6",key:"audubon",t:"Audubon In-Person",reqs:[]},
- {n:11,label:"7",key:"authority",t:"Price with Authority not Anxiety",reqs:[]}
+ {n:2,label:"1",key:"homework1",t:"Homework 1",reqs:[]},
+ {n:3,label:"2",key:"homework2",t:"Homework 2",reqs:[]},
+ {n:4,label:"3",key:"homework3",t:"Homework 3",reqs:[]},
+ {n:5,label:"4",key:"homework4",t:"Homework 4",reqs:[]},
+ {n:6,label:"5",key:"homework5",t:"Homework 5",reqs:[]},
+ {n:7,label:"6",key:"videos",t:"Recorded Class Videos- in Teams Folder",reqs:[]},
+ {n:8,label:"7",key:"airless",t:"What is airless spraying and painting equipment",reqs:[]},
+ {n:9,label:"8",key:"google-earth",t:"Why Use Google Earth Pro",reqs:[]},
+ {n:10,label:"9",key:"audubon",t:"Audubon In-Person",reqs:[]},
+ {n:11,label:"10",key:"authority",t:"Price with Authority not Anxiety",reqs:[]}
 ];
-var HOMEWORK_INDEXES=[1,2,3,4,5];
+/* n is a stable saved-data ID; label is the visible sequence. */
+var HOMEWORK_INDEXES=[0,1,2,3,4];
 var ST = [
  {k:"s0",g:"○",l:"Not started",c:"#D6D2CC",fg:"#4A4540"},
  {k:"s1",g:"◐",l:"Draft",c:"#fab219",fg:"#3A2B05"},
@@ -819,7 +819,7 @@ try{
 }catch(e){}
 function blankState(name,email,branch){
   return {
-    v:2, exportedAt:null,
+    v:3, exportedAt:null,
     student:{name:name,email:email,branch:branch,cohort:CFG.cohort},
     property:{name:"",addr:"",units:0,bldgs:0,types:0,stories:3,year:"",painted:"",sub:"",dist:0,mgmt:"",owner:"",kind:"Garden-style (2–3 story)",
               occ:false,fail:false,unsold:false,access:false},
@@ -835,27 +835,32 @@ function blankDeliverable(d){
 }
 function normalizeState(st){
   if(!st||!Array.isArray(st.deliverables)) return st;
-  if(st.v>=2&&st.deliverables.length===DELIV.length){
-    st.deliverables.forEach(function(d,i){d.n=i+1;});
+  if(st.v>=3&&st.deliverables.length===DELIV.length){
+    st.deliverables.forEach(function(d,i){d.n=DELIV[i].n;});
     return st;
   }
   var old=st.deliverables, next;
   if(old.length===8){
-    next=[old[0],old[1],blankDeliverable(DELIV[2]),blankDeliverable(DELIV[3]),blankDeliverable(DELIV[4]),blankDeliverable(DELIV[5]),
+    next=[old[1],blankDeliverable(DELIV[1]),blankDeliverable(DELIV[2]),blankDeliverable(DELIV[3]),blankDeliverable(DELIV[4]),
       old[3],old[4],old[5],old[6],old[7]];
     if(old[2]&&(old[2].status||old[2].notes||(old[2].files&&old[2].files.length))) st.removedEstimates=old[2];
+    st.removedHomeworkAssignments=st.removedHomeworkAssignments||old[0];
+  }else if(old.length===11){
+    st.removedHomeworkAssignments=st.removedHomeworkAssignments||old[0];
+    next=old.slice(1);
   }else{
     next=DELIV.map(function(d,i){return old[i]||blankDeliverable(d);});
   }
-  next.forEach(function(d,i){d.n=i+1;});
+  next.forEach(function(d,i){d.n=DELIV[i].n;});
   st.deliverables=next;
-  st.v=2;
+  st.v=3;
   return st;
 }
 var saveT=null;
 var attachWarned=false;
 function save(){
   if(!S) return;
+  S=normalizeState(S);
   S.savedAt=Date.now();
   var ok=put("state",S);
   queueLinkedWrite();
@@ -889,6 +894,7 @@ function liveRequest(method,body,participant){
 function stateWithoutHeavyFiles(st){
   var copy=JSON.parse(JSON.stringify(st||{}));
   (copy.deliverables||[]).forEach(function(d){ (d.files||[]).forEach(function(f){ if(f.data) f.data=null; }); });
+  if(copy.removedHomeworkAssignments)(copy.removedHomeworkAssignments.files||[]).forEach(function(f){if(f.data)f.data=null;});
   return copy;
 }
 function encodeLiveState(st){
@@ -1634,7 +1640,7 @@ function applyGrades(g){
     return {ok:false,msg:"That feedback file is addressed to "+(g.student.name||g.student.email)+", not to you. Nothing was changed."};
   var n=0;
   (g.deliverables||[]).forEach(function(x){
-    var dv=S.deliverables[x.n-1];
+    var dv=S.deliverables.find(function(d){return d.n===x.n;});
     if(dv){ dv.status=x.status; dv.feedback=x.feedback||""; n++; }
   });
   if(g.rubric) S.rubric=g.rubric;
@@ -1684,6 +1690,7 @@ function wireDrop(el,fn){
 }
 
 function boot(){
+  S=normalizeState(S);
   $("cohortLbl").textContent=CFG.showHeaderSubtitle ? [CFG.cohort,CFG.program].filter(Boolean).join(" · ") : "";
 
   // storage mode banner
