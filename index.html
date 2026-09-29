@@ -238,8 +238,10 @@ window.CONFIG = {
   .participant-notes-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
   .participant-notes-table th,.participant-notes-table td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
   .participant-notes-table th{background:var(--tint);font-size:12px;color:var(--muted)}
-  .participant-notes-table th:nth-child(1){width:22%}
-  .participant-notes-table th:nth-child(2){width:28%}
+  .participant-notes-table th:nth-child(1){width:16%}
+  .participant-notes-table th:nth-child(2){width:22%}
+  .participant-notes-table th:nth-child(3){width:26%}
+  .participant-notes-table textarea{min-height:80px;margin-bottom:6px}
   .participant-note-text{white-space:pre-wrap}
   @media(max-width:700px){.livegrid{grid-template-columns:1fr}}
 </style>
@@ -348,6 +350,7 @@ window.CONFIG = {
             </div>
             <div id="facLock"></div>
             <div id="fbBox"></div>
+            <div id="facilitatorMessage" class="note hide" style="white-space:pre-wrap" aria-live="polite"></div>
           </div>
         </div>
       </div>
@@ -686,7 +689,7 @@ window.CONFIG = {
     <div class="card" id="participantNotesCard">
       <div class="kicker">Participant notes</div>
       <h3 style="margin-top:5px">Notes for your facilitator · Items 1–10</h3>
-      <div class="cap">Comments from every participant, labeled by item. Updates automatically as participants save their notes online; homework does not need to be submitted first.</div>
+      <div class="cap">Notes and messages for every participant and item. Write a message on the right and click Save message. The participant sees it on that task. Clear the box and save to remove a message.</div>
       <div id="participantNotesList"></div>
     </div>
 
@@ -974,7 +977,7 @@ function queueLiveSave(){ if(!participantToken&&!activeParticipant&&!autoLiveNam
    Stored in the exact same answers format as participant records ("1"…"n" + fbcNotes),
    since the backend accepts that shape; a plain {dir:...} key was silently rejected. */
 var DIR_KEY="Class Directory", dirRegistered=false, excludedParticipants={}, directoryRevision=0;
-function isDirName(n){ return String(n||"").trim().toLowerCase()===DIR_KEY.toLowerCase() || String(n||"").trim()==="__directory__" || /^__class_homework_link_[1-5]__$/i.test(String(n||"").trim()) || /^__class_guide_/i.test(String(n||"").trim()); }
+function isDirName(n){ return String(n||"").trim().toLowerCase()===DIR_KEY.toLowerCase() || String(n||"").trim()==="__directory__" || /^__class_homework_link_[1-5]__$/i.test(String(n||"").trim()) || /^__class_guide_/i.test(String(n||"").trim()) || /^__class_task_messages__:/i.test(String(n||"").trim()); }
 function participantKey(n){ return String(n||"").trim().toLowerCase(); }
 function isParticipantExcluded(n){ return !!excludedParticipants[participantKey(n)]; }
 function packDir(list){
@@ -1225,6 +1228,7 @@ function openFile(f){
   document.body.appendChild(a); a.click(); a.remove();
 }
 function renderDeposit(){
+  renderTaskMessage();
   var d=DELIV[selD], dv=S.deliverables[selD];
   renderHomeworkAssignment();
   $("dKicker").textContent="Deliverable "+(d.label||d.n);
@@ -1430,15 +1434,25 @@ function upsert(rec){
   return true;
 }
 function renderParticipantNotes(){
+  if($("participantNotesList").contains(document.activeElement)&&document.activeElement.tagName==="TEXTAREA")return;
   var rows=[];
-  cohort.forEach(function(p){
+  cohort.forEach(function(p,pi){
+    var name=p.student&&(p.student.name||p.student.email)||"Participant",key=participantKey(name);
     DELIV.forEach(function(d,i){
       var dv=p.deliverables&&p.deliverables[i],note=String(dv&&dv.notes||"");
-      if(!note.trim())return;
-      rows.push('<tr><td>'+esc(p.student&&(p.student.name||p.student.email)||"Participant")+'</td><td>'+esc(d.label||d.n)+' · '+esc(d.t)+'</td><td class="participant-note-text">'+esc(note)+'</td></tr>');
+      var draftKey=JSON.stringify([key,d.n]),value=Object.prototype.hasOwnProperty.call(taskMessageDrafts,draftKey)?taskMessageDrafts[draftKey]:((taskMessages[key]||{})[d.n]||"");
+      rows.push('<tr><td>'+esc(name)+'</td><td>'+esc(d.label||d.n)+' · '+esc(d.t)+'</td><td class="participant-note-text">'+(note.trim()?esc(note):'<span class="cap">No note yet.</span>')+'</td><td><textarea maxlength="5000" data-message-participant="'+pi+'" data-message-item="'+i+'" aria-label="Message to '+esc(name)+' for item '+esc(d.label)+'"'+(taskMessageSaving[draftKey]?' disabled':'')+'>'+esc(value)+'</textarea><button type="button" class="btn s" data-save-message="'+pi+'" data-message-item="'+i+'"'+(taskMessageSaving[draftKey]?' disabled':'')+'>Save message</button><div class="cap" role="status" style="margin:5px 0">'+esc(taskMessageStatus[draftKey]||"")+'</div></td></tr>');
     });
   });
-  $("participantNotesList").innerHTML=rows.length?'<table class="participant-notes-table"><thead><tr><th scope="col">Participant</th><th scope="col">Item</th><th scope="col">Notes for your facilitator</th></tr></thead><tbody>'+rows.join("")+'</tbody></table>':'<div class="cap" style="margin:0">No participant notes yet.</div>';
+  $("participantNotesList").innerHTML=rows.length?'<table class="participant-notes-table"><thead><tr><th scope="col">Participant</th><th scope="col">Item</th><th scope="col">Notes for your facilitator</th><th scope="col">Message to participant</th></tr></thead><tbody>'+rows.join("")+'</tbody></table>':'<div class="cap" style="margin:0">No participants loaded yet.</div>';
+  [].forEach.call(document.querySelectorAll("[data-message-participant]"),function(el){
+    var p=cohort[+el.dataset.messageParticipant],name=p.student.name||p.student.email,n=DELIV[+el.dataset.messageItem].n,key=JSON.stringify([participantKey(name),n]);
+    el.oninput=function(){taskMessageDrafts[key]=el.value;taskMessageStatus[key]="Unsaved message";};
+  });
+  [].forEach.call(document.querySelectorAll("[data-save-message]"),function(el){
+    var p=cohort[+el.dataset.saveMessage],name=p.student.name||p.student.email,n=DELIV[+el.dataset.messageItem].n;
+    el.onclick=function(){saveTaskMessage(name,n);};
+  });
 }
 function renderCohort(){
   renderParticipantNotes();
@@ -2324,7 +2338,57 @@ function initGuide(){
   window.addEventListener("focus",refreshGuide);
 }
 
+/* Task messages are separate from submissions and grading feedback. */
+var taskMessages={},taskMessageDrafts={},taskMessageSaving={},taskMessageStatus={},taskMessageLocks={},taskMessageRevision=0,taskMessagesRefreshing=false;
+function taskMessageRecord(name){return "__class_task_messages__:"+participantKey(name);}
+async function readTaskMessages(name){
+  var record=await guideRequest(taskMessageRecord(name));
+  if(!record)return {};
+  if(record.taskMessagesV1!==1||!record.messages||typeof record.messages!=="object")throw new Error("Invalid message record");
+  return record.messages;
+}
+function renderTaskMessage(){
+  var box=$("facilitatorMessage");if(!box)return;
+  var name=S&&S.student&&(S.student.name||S.student.email),d=DELIV[selD];
+  var message=name&&d&&(taskMessages[participantKey(name)]||{})[d.n]||"";
+  box.classList.toggle("hide",!message);
+  box.textContent=message?"Message from your facilitator\n"+message:"";
+}
+async function refreshTaskMessages(){
+  if(taskMessagesRefreshing)return;taskMessagesRefreshing=true;var revision=taskMessageRevision;
+  try{
+    var names=[];
+    if(!$("viewF").classList.contains("hide"))cohort.forEach(function(p){var name=p.student&&(p.student.name||p.student.email);if(name)names.push(name);});
+    else if(S&&S.student&&(S.student.name||S.student.email))names.push(S.student.name||S.student.email);
+    await Promise.all(names.map(async function(name){
+      try{var messages=await readTaskMessages(name);if(revision===taskMessageRevision&&!taskMessageLocks[participantKey(name)])taskMessages[participantKey(name)]=messages;}catch(e){}
+    }));
+    renderTaskMessage();
+    if(!$("viewF").classList.contains("hide"))renderParticipantNotes();
+  }finally{taskMessagesRefreshing=false;}
+}
+async function saveTaskMessage(name,n){
+  var person=participantKey(name),key=JSON.stringify([person,n]);
+  if(taskMessageLocks[person]){taskMessageStatus[key]="Another message is saving. Try again in a moment.";renderParticipantNotes();return;}
+  var value=Object.prototype.hasOwnProperty.call(taskMessageDrafts,key)?taskMessageDrafts[key]:((taskMessages[person]||{})[n]||"");
+  if(value.length>5000)return;
+  taskMessageLocks[person]=true;taskMessageSaving[key]=true;taskMessageRevision++;taskMessageStatus[key]="Saving…";renderParticipantNotes();
+  try{
+    var messages=await readTaskMessages(name);messages[n]=value;
+    await guideRequest(taskMessageRecord(name),{taskMessagesV1:1,messages:messages});
+    var verified=await readTaskMessages(name);
+    if(verified[n]!==value)throw new Error("Save verification failed");
+    taskMessages[person]=verified;delete taskMessageDrafts[key];taskMessageStatus[key]=value?"Saved to participant’s task.":"Message removed from participant’s task.";
+  }catch(e){taskMessageStatus[key]="Not saved. Check your connection and click Save message again.";}
+  finally{taskMessageLocks[person]=false;taskMessageSaving[key]=false;renderParticipantNotes();renderTaskMessage();}
+}
+function initTaskMessages(){
+  setInterval(function(){if(!document.hidden)refreshTaskMessages();},5000);
+  window.addEventListener("focus",refreshTaskMessages);
+}
+
 /* ============================ START ============================ */
+initTaskMessages();
 initGuide();
 initHomeworkLinks();
 idbOpen().then(function(db){
