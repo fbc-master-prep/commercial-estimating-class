@@ -235,6 +235,12 @@ window.CONFIG = {
   .homework-link-box input{width:100%;min-width:0;margin:7px 0;padding:8px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:12px}
   .homework-link-status{font-size:12px;color:var(--muted);margin-top:7px;min-height:36px}
   .homework-assignment{padding:12px;border:1px solid var(--sage);border-radius:9px;margin-bottom:12px;background:var(--tint);overflow-wrap:anywhere}
+  .participant-notes-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
+  .participant-notes-table th,.participant-notes-table td{text-align:left;vertical-align:top;padding:10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+  .participant-notes-table th{background:var(--tint);font-size:12px;color:var(--muted)}
+  .participant-notes-table th:nth-child(1){width:22%}
+  .participant-notes-table th:nth-child(2){width:28%}
+  .participant-note-text{white-space:pre-wrap}
   @media(max-width:700px){.livegrid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -675,6 +681,13 @@ window.CONFIG = {
       <div class="cap">Paste or change an assignment link, then click Update link to share it with all participants. To remove an assignment link everywhere, clear its box and click Update link. Open participant pages update automatically within 15 seconds while online.</div>
       <div class="gridwrap"><table class="cg" id="cg"></table></div>
       <div class="legend" id="legend2"></div>
+    </div>
+
+    <div class="card" id="participantNotesCard">
+      <div class="kicker">Participant notes</div>
+      <h3 style="margin-top:5px">Notes for your facilitator · Items 1–10</h3>
+      <div class="cap">Comments from every participant, labeled by item. Updates automatically as participants save their notes online; homework does not need to be submitted first.</div>
+      <div id="participantNotesList"></div>
     </div>
 
     <div class="cols">
@@ -1416,7 +1429,19 @@ function upsert(rec){
   });
   return true;
 }
+function renderParticipantNotes(){
+  var rows=[];
+  cohort.forEach(function(p){
+    DELIV.forEach(function(d,i){
+      var dv=p.deliverables&&p.deliverables[i],note=String(dv&&dv.notes||"");
+      if(!note.trim())return;
+      rows.push('<tr><td>'+esc(p.student&&(p.student.name||p.student.email)||"Participant")+'</td><td>'+esc(d.label||d.n)+' · '+esc(d.t)+'</td><td class="participant-note-text">'+esc(note)+'</td></tr>');
+    });
+  });
+  $("participantNotesList").innerHTML=rows.length?'<table class="participant-notes-table"><thead><tr><th scope="col">Participant</th><th scope="col">Item</th><th scope="col">Notes for your facilitator</th></tr></thead><tbody>'+rows.join("")+'</tbody></table>':'<div class="cap" style="margin:0">No participant notes yet.</div>';
+}
 function renderCohort(){
+  renderParticipantNotes();
   updateParticipantNamesExport();
   $("fN").textContent=cohort.length;
   var await_=0, behind=0, tq=0;
