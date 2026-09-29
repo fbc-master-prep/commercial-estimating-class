@@ -690,6 +690,8 @@ window.CONFIG = {
       <div class="kicker">Participant notes</div>
       <h3 style="margin-top:5px">Notes for your facilitator · Items 1–10</h3>
       <div class="cap">Notes and messages for every participant and item. Write a message on the right and click Save message. The participant sees it on that task. Clear the box and save to remove a message.</div>
+      <label for="participantNotesFilter">Show participant</label>
+      <select id="participantNotesFilter" style="max-width:360px;margin:6px 0 16px"><option value="">All participants</option></select>
       <div id="participantNotesList"></div>
     </div>
 
@@ -1434,10 +1436,22 @@ function upsert(rec){
   return true;
 }
 function renderParticipantNotes(){
+  var filter=$("participantNotesFilter"),selected=filter.value;
+  var options='<option value="">All participants</option>';
+  var selectionExists=!selected;
+  cohort.forEach(function(p){
+    var name=p.student&&(p.student.name||p.student.email)||"Participant",key=participantKey(name);
+    if(key===selected)selectionExists=true;
+    options+='<option value="'+esc(key)+'">'+esc(name)+'</option>';
+  });
+  if(filter.innerHTML!==options)filter.innerHTML=options;
+  filter.value=selectionExists?selected:"";
+  filter.onchange=function(){renderParticipantNotes();};
   if($("participantNotesList").contains(document.activeElement)&&document.activeElement.tagName==="TEXTAREA")return;
   var rows=[];
   cohort.forEach(function(p,pi){
     var name=p.student&&(p.student.name||p.student.email)||"Participant",key=participantKey(name);
+    if(filter.value&&key!==filter.value)return;
     DELIV.forEach(function(d,i){
       var dv=p.deliverables&&p.deliverables[i],note=String(dv&&dv.notes||"");
       var draftKey=JSON.stringify([key,d.n]),value=Object.prototype.hasOwnProperty.call(taskMessageDrafts,draftKey)?taskMessageDrafts[draftKey]:((taskMessages[key]||{})[d.n]||"");
