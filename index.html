@@ -288,6 +288,11 @@ window.CONFIG = {
 
   <!-- ============ PARTICIPANT ============ -->
   <div id="viewP" class="hide">
+    <div class="card">
+      <button type="button" class="btn p" id="guideDownloadP" disabled>Estimating Guide</button>
+      <div class="cap" id="guideInfoP" style="margin:8px 0">Checking for the estimating guide…</div>
+      <div class="note">Download your own copy and open it in Excel. Your edits stay in your copy.</div>
+    </div>
     <div class="tiles">
       <div class="tile"><div class="k">Homework Assignments</div><div class="v" id="tHomework">0</div><div class="n">assignments added</div></div>
       <div class="tile"><div class="k">Completed Homework</div><div class="v" id="tCompleted">0</div><div class="n">submitted or approved</div></div>
@@ -577,6 +582,18 @@ window.CONFIG = {
 
   <!-- ============ FACILITATOR ============ -->
   <div id="viewF" class="hide">
+    <div class="card">
+      <h3>Estimating Guide</h3>
+      <div class="cap">Upload an Excel workbook for everyone to download as their own copy. Uploading another workbook replaces the current guide. Excel files up to 10 MB.</div>
+      <div class="row">
+        <button type="button" class="btn p" id="guideUpload">Estimating Guide</button>
+        <input type="file" id="guideFile" accept=".xlsx,.xls,.xlsm" class="hide">
+        <button type="button" class="btn s" id="guideDownloadF" disabled>Download a copy</button>
+        <button type="button" class="btn d" id="guideDelete" disabled>Delete guide</button>
+      </div>
+      <div class="cap" id="guideInfoF" style="margin:8px 0">Checking for the estimating guide…</div>
+      <div id="guideStatus" role="status" aria-live="polite"></div>
+    </div>
     <div class="card" id="participantAccessCard">
       <div class="kicker">Live participant access</div>
       <h3 style="margin-top:5px">Create and monitor participant links</h3>
@@ -944,7 +961,7 @@ function queueLiveSave(){ if(!participantToken&&!activeParticipant&&!autoLiveNam
    Stored in the exact same answers format as participant records ("1"…"n" + fbcNotes),
    since the backend accepts that shape; a plain {dir:...} key was silently rejected. */
 var DIR_KEY="Class Directory", dirRegistered=false, excludedParticipants={}, directoryRevision=0;
-function isDirName(n){ return String(n||"").trim().toLowerCase()===DIR_KEY.toLowerCase() || String(n||"").trim()==="__directory__" || /^__class_homework_link_[1-5]__$/i.test(String(n||"").trim()); }
+function isDirName(n){ return String(n||"").trim().toLowerCase()===DIR_KEY.toLowerCase() || String(n||"").trim()==="__directory__" || /^__class_homework_link_[1-5]__$/i.test(String(n||"").trim()) || /^__class_guide_/i.test(String(n||"").trim()); }
 function participantKey(n){ return String(n||"").trim().toLowerCase(); }
 function isParticipantExcluded(n){ return !!excludedParticipants[participantKey(n)]; }
 function packDir(list){
@@ -2156,7 +2173,134 @@ function initHomeworkLinks(){
   window.addEventListener("focus",refreshHomeworkLinks);
 }
 
+/* The guide is an immutable binary copy, separate from participant submissions.
+   Upload and verify versioned chunks before publishing the small current-file record. */
+var GUIDE_KEY="__class_guide_current__", GUIDE_MAX=10*1024*1024, GUIDE_CHUNK=180000;
+var guideCurrent=null, guideBusy=false, guideReading=false, guideDownloading=false, guideRevision=0;
+function guideRequest(key,value){
+  var options={cache:"no-store"},url=CLASS_SHARED_API;
+  if(value===undefined)url+="?id="+encodeURIComponent(sharedSheetId)+"&fbc="+encodeURIComponent(CLASS_FBC)+"&franchise="+encodeURIComponent(key);
+  else {
+    var answers=encodeLiveState(value);
+    for(var i=1;i<=12;i++)if(answers[String(i)]===undefined)answers[String(i)]="";
+    options={method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:sharedSheetId,fbc:CLASS_FBC,franchise:key,answers:answers})};
+  }
+  return fetch(url,options).then(function(r){
+    if(!r.ok)throw new Error("The guide could not be saved or loaded. Check your connection and try again.");
+    return r.json();
+  }).then(function(d){return decodeLiveState(d.answers);});
+}
+function checkedGuide(value){
+  if(!value||value.deleted)return null;
+  if(value.guideV1!==1||!/^\w[\w-]{10,80}$/.test(value.version)||!/^.{1,240}\.(xlsx|xls|xlsm)$/i.test(value.name)||
+     !Number.isInteger(value.size)||value.size<1||value.size>GUIDE_MAX||!Number.isInteger(value.chunks)||
+     value.chunks!==Math.ceil(4*Math.ceil(value.size/3)/GUIDE_CHUNK)||!/^[a-f0-9]{64}$/.test(value.hash))throw new Error("The estimating guide record is invalid.");
+  return value;
+}
+function guideChunkKey(meta,i){return "__class_guide_"+meta.version+"_"+i+"__";}
+function guideBytes(base64){var raw=atob(base64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return bytes;}
+function guideHash(bytes){return crypto.subtle.digest("SHA-256",bytes).then(function(hash){return Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");});}
+function renderGuide(){
+  var message=guideCurrent?guideCurrent.name+" · "+bytes(guideCurrent.size):"No estimating guide is currently available.";
+  $("guideInfoP").textContent=message;$("guideInfoF").textContent=message;
+  $("guideUpload").disabled=guideBusy;$("guideDelete").disabled=guideBusy||!guideCurrent;
+  $("guideDownloadP").disabled=guideDownloading||!guideCurrent;$("guideDownloadF").disabled=guideDownloading||!guideCurrent;
+}
+function refreshGuide(){
+  if(guideBusy||guideReading)return Promise.resolve();
+  guideReading=true;var revision=guideRevision;
+  return guideRequest(GUIDE_KEY).then(function(value){
+    if(revision!==guideRevision)return;
+    guideCurrent=checkedGuide(value);renderGuide();
+  }).catch(function(){if(revision===guideRevision&&!guideCurrent){$("guideInfoP").textContent=$("guideInfoF").textContent="Could not load the estimating guide. Retrying automatically.";}})
+    .finally(function(){guideReading=false;});
+}
+function readGuideFile(file){return new Promise(function(resolve,reject){var reader=new FileReader();reader.onload=function(){resolve(String(reader.result).split(",")[1]);};reader.onerror=function(){reject(new Error("Could not read this Excel file."));};reader.readAsDataURL(file);});}
+async function cleanupGuide(meta){
+  if(!meta)return;
+  for(var i=0;i<meta.chunks;i++)await guideRequest(guideChunkKey(meta,i),{deleted:true});
+}
+async function uploadGuide(file){
+  if(!file||guideBusy)return;
+  if(!/\.(xlsx|xls|xlsm)$/i.test(file.name)||file.name.length>240||file.size<1||file.size>GUIDE_MAX){$("guideStatus").textContent="Choose an Excel workbook (.xlsx, .xls or .xlsm), up to 10 MB.";return;}
+  guideBusy=true;guideRevision++;renderGuide();var pending=null,manifestAttempted=false,uploadedChunks=0;
+  try{
+    var previous=checkedGuide(await guideRequest(GUIDE_KEY));
+    var base64=await readGuideFile(file),data=guideBytes(base64);
+    // Reject renamed non-Excel files without modifying workbook contents.
+    var zip=data[0]===80&&data[1]===75,ole=data[0]===208&&data[1]===207&&data[2]===17&&data[3]===224;
+    if(!(/\.xls$/i.test(file.name)?ole:zip))throw new Error("This file does not appear to be an Excel workbook.");
+    pending=checkedGuide({guideV1:1,version:crypto.randomUUID(),name:file.name,size:data.length,chunks:Math.ceil(base64.length/GUIDE_CHUNK),hash:await guideHash(data)});
+    for(var i=0;i<pending.chunks;i++){
+      $("guideStatus").textContent="Uploading estimating guide… "+Math.round(i/pending.chunks*100)+"%";
+      var part=base64.slice(i*GUIDE_CHUNK,(i+1)*GUIDE_CHUNK),key=guideChunkKey(pending,i);
+      uploadedChunks=i+1;
+      await guideRequest(key,{guideChunkV1:1,data:part});
+      var check=await guideRequest(key);
+      if(!check||check.data!==part)throw new Error("Upload verification failed. Please try again.");
+    }
+    // Do not overwrite a change made by another facilitator during this upload.
+    var latest=checkedGuide(await guideRequest(GUIDE_KEY));
+    if((latest&&latest.version)!==(previous&&previous.version))throw new Error("The guide changed in another tab. Refresh and upload again.");
+    manifestAttempted=true;await guideRequest(GUIDE_KEY,pending);
+    guideCurrent=checkedGuide(await guideRequest(GUIDE_KEY));
+    if(!guideCurrent||guideCurrent.version!==pending.version)throw new Error("Could not verify the new guide. Refresh to check the current version.");
+    $("guideStatus").textContent="Estimating Guide uploaded. Every participant can download their own copy.";
+    try{await cleanupGuide(previous);}catch(e){$("guideStatus").textContent+=" The previous guide is no longer offered; storage cleanup could not finish.";}
+  }catch(e){
+    $("guideStatus").textContent=e.message||"Upload failed. Please try again.";
+    if(pending&&!manifestAttempted){try{await cleanupGuide(Object.assign({},pending,{chunks:uploadedChunks}));}catch(ignore){}}
+    // Never erase a version after a possibly successful manifest write.
+  }finally{guideBusy=false;$("guideFile").value="";renderGuide();refreshGuide();}
+}
+async function deleteGuide(){
+  if(guideBusy||!guideCurrent)return;
+  if(!confirm("Remove the Estimating Guide from all participant pages? Copies already downloaded will remain on their computers."))return;
+  guideBusy=true;guideRevision++;renderGuide();
+  try{
+    var previous=checkedGuide(await guideRequest(GUIDE_KEY));
+    if(previous&&previous.version!==guideCurrent.version)throw new Error("The guide changed in another tab. Refresh before deleting it.");
+    await guideRequest(GUIDE_KEY,{guideV1:1,deleted:true});
+    if(checkedGuide(await guideRequest(GUIDE_KEY)))throw new Error("Could not verify deletion. Refresh and try again.");
+    guideCurrent=null;renderGuide();$("guideStatus").textContent="Estimating Guide removed from all participant pages.";
+    try{await cleanupGuide(previous);}catch(e){$("guideStatus").textContent+=" Storage cleanup could not finish.";}
+  }catch(e){$("guideStatus").textContent=e.message;}
+  finally{guideBusy=false;renderGuide();refreshGuide();}
+}
+async function downloadGuide(){
+  if(guideDownloading)return;guideDownloading=true;renderGuide();
+  try{
+    var meta=checkedGuide(await guideRequest(GUIDE_KEY));guideCurrent=meta;
+    if(!meta)throw new Error("The facilitator has removed the estimating guide.");
+    var parts=[];
+    for(var i=0;i<meta.chunks;i++){
+      $("guideInfoP").textContent=$("guideInfoF").textContent="Preparing your copy… "+Math.round(i/meta.chunks*100)+"%";
+      var part=await guideRequest(guideChunkKey(meta,i));
+      if(!part||part.guideChunkV1!==1||typeof part.data!=="string")throw new Error("The guide changed while downloading. Please try again.");
+      parts.push(part.data);
+    }
+    var data=guideBytes(parts.join(""));
+    if(data.length!==meta.size||await guideHash(data)!==meta.hash)throw new Error("Download verification failed. Please try again.");
+    var latest=checkedGuide(await guideRequest(GUIDE_KEY));
+    if(!latest||latest.version!==meta.version){guideCurrent=latest;throw new Error("The guide changed while downloading. Please try again.");}
+    var mime=/\.xlsm$/i.test(meta.name)?"application/vnd.ms-excel.sheet.macroEnabled.12":/\.xls$/i.test(meta.name)?"application/vnd.ms-excel":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    var url=URL.createObjectURL(new Blob([data],{type:mime})),a=document.createElement("a");
+    a.href=url;a.download=meta.name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},60000);
+    toast("Your Estimating Guide copy is downloaded. Open it in Excel.");
+  }catch(e){toast(e.message||"Could not download the guide. Please try again.",true);}
+  finally{guideDownloading=false;renderGuide();}
+}
+function initGuide(){
+  $("guideUpload").onclick=function(){$("guideFile").click();};
+  $("guideFile").onchange=function(){uploadGuide(this.files[0]);};
+  $("guideDelete").onclick=deleteGuide;
+  $("guideDownloadP").onclick=downloadGuide;$("guideDownloadF").onclick=downloadGuide;
+  refreshGuide();setInterval(function(){if(!document.hidden)refreshGuide();},15000);
+  window.addEventListener("focus",refreshGuide);
+}
+
 /* ============================ START ============================ */
+initGuide();
 initHomeworkLinks();
 idbOpen().then(function(db){
   DB=db;
