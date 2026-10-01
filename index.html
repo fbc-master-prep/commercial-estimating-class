@@ -322,9 +322,7 @@ window.CONFIG = {
             <div class="legend" id="legend"></div>
           </div>
           <div class="savebar">
-            <span class="lbl" id="saveBarMsg">Your work is auto-saved on this computer. Use this to save it into a file you can share.</span>
-            <button class="btn savebtn" id="barSave">Save my work</button>
-            <button class="btn s" id="barOptions">Save options</button>
+            <span class="lbl" id="saveBarMsg">All work is Auto-saved on this computer. Click Save my work at the top of page to create file to share.</span>
           </div>
         </div>
         <div>
@@ -1634,8 +1632,7 @@ function primarySave(){
 }
 function updateSaveBar(){
   var el=$("saveBarMsg"); if(!el) return;
-  if(fileHandle) el.innerHTML='Linked to <b>'+esc(linkedName)+'</b>. Saving writes straight to that file'+(lastSync?' \u00b7 last saved '+new Date(lastSync).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):'')+'.';
-  else el.textContent="Auto-saved on this computer. Click Save my work to create a file you can put in Teams or email.";
+  el.textContent="All work is Auto-saved on this computer. Click Save my work at the top of page to create file to share.";
 }
 
 function queueLinkedWrite(){
@@ -1858,8 +1855,6 @@ $("notes").oninput=function(){ var dv=S.deliverables[selD]; dv.notes=this.value;
 
 // send / restore
 $("topSave").onclick=primarySave;
-$("barSave").onclick=primarySave;
-$("barOptions").onclick=function(){ showTab("tabSend"); window.scrollTo({top:0,behavior:"smooth"}); };
 $("saveFilled").onclick=function(){ saveFilledCopy(); toast("Saved a filled copy to your Downloads folder"); };
 $("linkFile").onclick=function(){ linkNewFile(); };
 $("openLinked").onclick=function(){ openLinkedFile(); };
