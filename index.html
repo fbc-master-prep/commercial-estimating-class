@@ -685,7 +685,7 @@ window.CONFIG = {
 
     <div class="card" id="participantNotesCard">
       <div class="kicker">Participant notes</div>
-      <h3 style="margin-top:5px">Notes for your facilitator · Items 1–10</h3>
+      <h3 style="margin-top:5px">Notes for your facilitator · Items 1–11</h3>
       <div class="cap">Notes and messages for every participant and item. Write a message on the right and click Save message. The participant sees it on that task. Clear the box and save to remove a message.</div>
       <label for="participantNotesFilter">Show participant</label>
       <select id="participantNotesFilter" style="max-width:360px;margin:6px 0 16px"><option value="">All participants</option><option value="__hide_all__">Hide all participants</option></select>
@@ -777,7 +777,8 @@ var DELIV = [
  {n:8,label:"7",key:"airless",t:"What is airless spraying and painting equipment",reqs:[]},
  {n:9,label:"8",key:"google-earth",t:"Why Use Google Earth Pro",reqs:[]},
  {n:10,label:"9",key:"audubon",t:"Audubon In-Person",reqs:[]},
- {n:11,label:"10",key:"authority",t:"Price with Authority not Anxiety",reqs:[]}
+ {n:11,label:"10",key:"authority",t:"Price with Authority not Anxiety",reqs:[]},
+ {n:12,label:"11",key:"client-priorities",t:"What Matters Most to the Client",reqs:[]}
 ];
 /* n is a stable saved-data ID; label is the visible sequence. */
 var HOMEWORK_INDEXES=[0,1,2,3,4];
@@ -851,7 +852,7 @@ try{
 }catch(e){}
 function blankState(name,email,branch){
   return {
-    v:3, exportedAt:null,
+    v:4, exportedAt:null,
     student:{name:name,email:email,branch:branch,cohort:CFG.cohort},
     property:{name:"",addr:"",units:0,bldgs:0,types:0,stories:3,year:"",painted:"",sub:"",dist:0,mgmt:"",owner:"",kind:"Garden-style (2–3 story)",
               occ:false,fail:false,unsold:false,access:false},
@@ -867,8 +868,10 @@ function blankDeliverable(d){
 }
 function normalizeState(st){
   if(!st||!Array.isArray(st.deliverables)) return st;
-  if(st.v>=3&&st.deliverables.length===DELIV.length){
+  if(st.v>=3){
+    st.deliverables=DELIV.map(function(d,i){return st.deliverables[i]||blankDeliverable(d);});
     st.deliverables.forEach(function(d,i){d.n=DELIV[i].n;});
+    st.v=4;
     return st;
   }
   var old=st.deliverables, next;
@@ -883,9 +886,10 @@ function normalizeState(st){
   }else{
     next=DELIV.map(function(d,i){return old[i]||blankDeliverable(d);});
   }
+  next=DELIV.map(function(d,i){return next[i]||blankDeliverable(d);});
   next.forEach(function(d,i){d.n=DELIV[i].n;});
   st.deliverables=next;
-  st.v=3;
+  st.v=4;
   return st;
 }
 var saveT=null;
