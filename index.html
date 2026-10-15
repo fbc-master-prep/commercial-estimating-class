@@ -347,7 +347,10 @@ window.CONFIG = {
             </div>
             <div id="facLock"></div>
             <div id="fbBox"></div>
-            <div id="facilitatorMessage" class="note hide" style="white-space:pre-wrap" aria-live="polite"></div>
+            <section id="facilitatorMessage" class="hide" style="margin-top:28px;padding-top:20px;border-top:2px solid var(--line)" aria-labelledby="facilitatorMessageHeading" aria-live="polite">
+              <h4 id="facilitatorMessageHeading" style="font-size:17px;font-weight:700;margin:0 0 12px">Message from your Facilitator</h4>
+              <div id="facilitatorMessageText" class="note" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:0;padding:16px;border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:8px"></div>
+            </section>
           </div>
         </div>
       </div>
@@ -2423,7 +2426,7 @@ function renderTaskMessage(){
   var name=S&&S.student&&(S.student.name||S.student.email),d=DELIV[selD];
   var message=name&&d&&(taskMessages[participantKey(name)]||{})[d.n]||"";
   box.classList.toggle("hide",!message);
-  box.textContent=message?"Message from your facilitator\n"+message:"";
+  $("facilitatorMessageText").textContent=message;
 }
 async function refreshTaskMessages(){
   if(taskMessagesRefreshing)return;taskMessagesRefreshing=true;var revision=taskMessageRevision;
