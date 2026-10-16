@@ -230,7 +230,7 @@ window.CONFIG = {
   .livegrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end}
   .liveactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   .liveurl{margin-top:10px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--tint);font-size:12px;word-break:break-all}
-  .homework-links{display:grid;grid-template-columns:repeat(5,minmax(180px,1fr));gap:10px;overflow-x:auto;margin:14px 0;padding:3px}
+  .homework-links{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:10px;overflow-x:auto;margin:14px 0;padding:3px}
   .homework-link-box{border:1px solid var(--line);border-radius:9px;padding:12px;background:var(--tint)}
   .homework-link-box input{width:100%;min-width:0;margin:7px 0;padding:8px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:12px}
   .homework-link-status{font-size:12px;color:var(--muted);margin-top:7px;min-height:36px}
@@ -688,7 +688,7 @@ window.CONFIG = {
 
     <div class="card" id="participantNotesCard">
       <div class="kicker">Participant notes</div>
-      <h3 style="margin-top:5px">Notes for your facilitator · Items 1–11</h3>
+      <h3 style="margin-top:5px">Notes for your facilitator · Items 1–10</h3>
       <div class="cap">Notes and messages for every participant and item. Write a message on the right and click Save message. The participant sees it on that task. Clear the box and save to remove a message.</div>
       <label for="participantNotesFilter">Show participant</label>
       <select id="participantNotesFilter" style="max-width:360px;margin:6px 0 16px"><option value="">All participants</option><option value="__hide_all__">Hide all participants</option></select>
@@ -775,16 +775,15 @@ var DELIV = [
  {n:3,label:"2",key:"homework2",t:"Homework 2",reqs:[]},
  {n:4,label:"3",key:"homework3",t:"Homework 3",reqs:[]},
  {n:5,label:"4",key:"homework4",t:"Homework 4",reqs:[]},
- {n:6,label:"5",key:"homework5",t:"Homework 5",reqs:[]},
- {n:7,label:"6",key:"videos",t:"Recorded Class Videos- in Teams Folder",reqs:[]},
- {n:8,label:"7",key:"airless",t:"What is airless spraying and painting equipment",reqs:[]},
- {n:9,label:"8",key:"google-earth",t:"Why Use Google Earth Pro",reqs:[]},
- {n:10,label:"9",key:"audubon",t:"Audubon In-Person",reqs:[]},
- {n:11,label:"10",key:"authority",t:"Price with Authority not Anxiety",reqs:[]},
- {n:12,label:"11",key:"client-priorities",t:"What Matters Most to the Client",reqs:[]}
+ {n:7,label:"5",key:"videos",t:"Recorded Class Videos- in Teams Folder",reqs:[]},
+ {n:8,label:"6",key:"airless",t:"What is airless spraying and painting equipment",reqs:[]},
+ {n:9,label:"7",key:"google-earth",t:"Why Use Google Earth Pro",reqs:[]},
+ {n:10,label:"8",key:"audubon",t:"Audubon In-Person",reqs:[]},
+ {n:11,label:"9",key:"authority",t:"Price with Authority not Anxiety",reqs:[]},
+ {n:12,label:"10",key:"client-priorities",t:"What Matters Most to the Client",reqs:[]}
 ];
 /* n is a stable saved-data ID; label is the visible sequence. */
-var HOMEWORK_INDEXES=[0,1,2,3,4];
+var HOMEWORK_INDEXES=[0,1,2,3];
 var ST = [
  {k:"s0",g:"○",l:"Not started",c:"#D6D2CC",fg:"#4A4540"},
  {k:"s1",g:"◐",l:"Draft",c:"#fab219",fg:"#3A2B05"},
@@ -855,7 +854,7 @@ try{
 }catch(e){}
 function blankState(name,email,branch){
   return {
-    v:4, exportedAt:null,
+    v:5, exportedAt:null,
     student:{name:name,email:email,branch:branch,cohort:CFG.cohort},
     property:{name:"",addr:"",units:0,bldgs:0,types:0,stories:3,year:"",painted:"",sub:"",dist:0,mgmt:"",owner:"",kind:"Garden-style (2–3 story)",
               occ:false,fail:false,unsold:false,access:false},
@@ -871,30 +870,25 @@ function blankDeliverable(d){
 }
 function normalizeState(st){
   if(!st||!Array.isArray(st.deliverables)) return st;
-  if(st.v>=3){
-    st.deliverables=DELIV.map(function(d,i){return st.deliverables[i]||blankDeliverable(d);});
-    st.deliverables.forEach(function(d,i){d.n=DELIV[i].n;});
-    st.v=4;
-    return st;
+  var old=st.deliverables;
+  if(!(st.v>=3)){
+    if(old.length===8){
+      if(old[2]&&(old[2].status||old[2].notes||(old[2].files&&old[2].files.length))) st.removedEstimates=old[2];
+      st.removedHomeworkAssignments=st.removedHomeworkAssignments||old[0];
+      old=[old[1],blankDeliverable({n:3,reqs:[]}),blankDeliverable({n:4,reqs:[]}),blankDeliverable({n:5,reqs:[]}),blankDeliverable({n:6,reqs:[]}),old[3],old[4],old[5],old[6],old[7]];
+    }else if(old.length===11){
+      st.removedHomeworkAssignments=st.removedHomeworkAssignments||old[0];
+      old=old.slice(1);
+    }
+    old.forEach(function(d,i){if(d)d.n=i+2;});
   }
-  var old=st.deliverables, next;
-  if(old.length===8){
-    next=[old[1],blankDeliverable(DELIV[1]),blankDeliverable(DELIV[2]),blankDeliverable(DELIV[3]),blankDeliverable(DELIV[4]),
-      old[3],old[4],old[5],old[6],old[7]];
-    if(old[2]&&(old[2].status||old[2].notes||(old[2].files&&old[2].files.length))) st.removedEstimates=old[2];
-    st.removedHomeworkAssignments=st.removedHomeworkAssignments||old[0];
-  }else if(old.length===11){
-    st.removedHomeworkAssignments=st.removedHomeworkAssignments||old[0];
-    next=old.slice(1);
-  }else{
-    next=DELIV.map(function(d,i){return old[i]||blankDeliverable(d);});
-  }
-  next=DELIV.map(function(d,i){return next[i]||blankDeliverable(d);});
-  next.forEach(function(d,i){d.n=DELIV[i].n;});
-  st.deliverables=next;
-  st.v=4;
+  var removed=old.find(function(d){return d&&d.n===6;});
+  if(removed)st.removedHomework5=removed;
+  st.deliverables=DELIV.map(function(d){return old.find(function(x){return x&&x.n===d.n;})||blankDeliverable(d);});
+  st.v=5;
   return st;
 }
+
 var saveT=null;
 var attachWarned=false;
 function save(){
@@ -934,6 +928,7 @@ function stateWithoutHeavyFiles(st){
   var copy=JSON.parse(JSON.stringify(st||{}));
   (copy.deliverables||[]).forEach(function(d){ (d.files||[]).forEach(function(f){ if(f.data) f.data=null; }); });
   if(copy.removedHomeworkAssignments)(copy.removedHomeworkAssignments.files||[]).forEach(function(f){if(f.data)f.data=null;});
+  if(copy.removedHomework5)(copy.removedHomework5.files||[]).forEach(function(f){if(f.data)f.data=null;});
   return copy;
 }
 function encodeLiveState(st){
@@ -1531,7 +1526,7 @@ function renderCohort(){
     var submitted=homework.filter(function(d){return d.status>=2}).length;
     return '<div class="pitem" data-p="'+i+'"><span><button type="button" class="participant-page" data-name="'+esc(p.student.name||p.student.email)+'" title="Open participant page in a new tab">'+esc(p.student.name||p.student.email||"—")+'</button></span>'+
       '<span class="bar">'+homework.map(function(d){return '<i style="background:'+ST[d.status].c+'"></i>'}).join("")+'</span>'+
-      '<span style="font-size:12px;color:var(--muted)">'+submitted+'/5</span></div>';
+      '<span style="font-size:12px;color:var(--muted)">'+submitted+'/4</span></div>';
   }).join("");
   [].forEach.call(document.querySelectorAll("#plist .pitem"),function(b){
     b.onclick=function(){ var pi=+b.dataset.p; openReview(pi, firstOpen(cohort[pi])); };
@@ -2162,9 +2157,9 @@ document.addEventListener("keydown",function(e){
 
 /* Shared assignments live separately from participant work: posting never changes
    submissions, notes, files, feedback or status. Each number has its own record. */
-var homeworkLinks=["","","","",""], homeworkLoaded=[false,false,false,false,false];
-var homeworkDirty=[false,false,false,false,false], homeworkSaving=[false,false,false,false,false];
-var homeworkRevision=[0,0,0,0,0], homeworkRefreshing=false;
+var homeworkLinks=["","","",""], homeworkLoaded=[false,false,false,false];
+var homeworkDirty=[false,false,false,false], homeworkSaving=[false,false,false,false];
+var homeworkRevision=[0,0,0,0], homeworkRefreshing=false;
 function homeworkRecord(i){return "__class_homework_link_"+(i+1)+"__";}
 function validHomeworkUrl(value){
   var raw=String(value||"").trim();
